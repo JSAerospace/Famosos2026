@@ -183,7 +183,7 @@ function preloadAllStickers() {
 }
 
 function addTeamToPreloadQueue(team, queue) {
-  const max = team.id === 'extrastickers' ? 5 : 11;
+  const max = team.id === 'extrastickers' ? 6 : 11;
   // Bandera del equipo
   if (team.id !== 'extrastickers') {
     queue.push(`${ALBUM_CONFIG.basePath}/${team.id}/bandera.png`);
@@ -301,7 +301,7 @@ function updateTopBar() {
   
   let totalStickers = 0;
   ALBUM_CONFIG.teams.forEach(t => {
-    totalStickers += t.id === 'extrastickers' ? 5 : 11;
+    totalStickers += t.id === 'extrastickers' ? 6 : 11;
   });
   let pastedCount = Object.keys(state.pasted).length;
   
@@ -413,7 +413,7 @@ function renderAlbumPage(justPastedKey = null) {
         <div style="font-size: 2.5rem; margin-bottom: 10px; filter: drop-shadow(0 0 10px #ffd700);">👑</div>
         <div style="font-size: 1.3rem; font-weight: bold; text-transform: uppercase; margin-bottom: 6px; letter-spacing: 1px;">Colección de Leyendas</div>
         <p style="font-size: 0.85rem; color: #ccc; line-height: 1.4; max-width: 250px; margin: 0 auto;">
-          Las 5 leyendas más exclusivas de la historia del fútbol. Conseguilas abriendo sobres para completar tu colección premium al 100%.
+          Las 6 leyendas más exclusivas de la historia del fútbol. Conseguilas abriendo sobres para completar tu colección premium al 100%.
         </p>
       </div>
     `;
@@ -426,7 +426,7 @@ function renderAlbumPage(justPastedKey = null) {
     `;
   }
   
-  const totalStickers = team.id === 'extrastickers' ? 5 : 11;
+  const totalStickers = team.id === 'extrastickers' ? 6 : 11;
   for(let i=1; i<=totalStickers; i++) {
     const cardKey = `${team.id}_${i}`;
     const isPasted = !!state.pasted[cardKey];
@@ -458,7 +458,7 @@ function renderAlbumPage(justPastedKey = null) {
       slot.onclick = () => showToast(`Buscá la figurita ${i} en los sobres`);
     }
     
-    if (i <= 5) gridL.appendChild(slot);
+    if (team.id === 'extrastickers' || i <= 5) gridL.appendChild(slot);
     else gridR.appendChild(slot);
   }
 }
@@ -603,7 +603,7 @@ function revealCards() {
       const standardTeams = ALBUM_CONFIG.teams.filter(t => t.id !== 'extrastickers');
       team = standardTeams[Math.floor(Math.random() * standardTeams.length)];
     }
-    const maxStickers = team.id === 'extrastickers' ? 5 : 11;
+    const maxStickers = team.id === 'extrastickers' ? 6 : 11;
     const num = Math.floor(Math.random() * maxStickers) + 1;
     const cardKey = `${team.id}_${num}`;
     
@@ -648,7 +648,7 @@ function renderDuplicates() {
   let hasDups = false;
   
   ALBUM_CONFIG.teams.forEach(team => {
-    const maxStickers = team.id === 'extrastickers' ? 5 : 11;
+    const maxStickers = team.id === 'extrastickers' ? 6 : 11;
     for(let i=1; i<=maxStickers; i++){
       const key = `${team.id}_${i}`;
       const pasted = !!state.pasted[key];
