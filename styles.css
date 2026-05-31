@@ -16,57 +16,36 @@
 body { font-family: var(--font-main); background-color: var(--bg-color); color: var(--text-main); min-height: 100vh; overflow-x: hidden; overflow-y: auto; display: flex; flex-direction: column; }
 .hidden { display: none !important; }
 
-/* TOPBAR — mobile-first wrap */
-.topbar {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 14px;
-  gap: 8px;
-  background: rgba(0, 0, 0, 0.88);
-  color: white;
-  border-bottom: 2px solid #555;
-}
-.topbar-left  { display: flex; align-items: center; }
-.topbar-title { font-family: var(--font-title); font-size: 1.4rem; color: white; white-space: nowrap; }
-.topbar-center {
-  flex: 1;
-  min-width: 0;
-  overflow-x: auto;
-  white-space: nowrap;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-}
-.topbar-center::-webkit-scrollbar { display: none; }
-.nav-tabs { display: inline-flex; gap: 6px; }
-.nav-tab { background: none; border: none; color: #aaa; padding: 8px 14px; font-size: 1rem; cursor: pointer; border-radius: 20px; transition: 0.3s; font-weight: bold; white-space: nowrap; }
+/* TOPBAR */
+.topbar { display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; background: rgba(0, 0, 0, 0.8); color: white; border-bottom: 2px solid #555; }
+.topbar-title { font-family: var(--font-title); font-size: 1.5rem; color: white; }
+.nav-tabs { display: flex; gap: 10px; }
+.nav-tab { background: none; border: none; color: #aaa; padding: 10px 20px; font-size: 1.1rem; cursor: pointer; border-radius: 20px; transition: 0.3s; font-weight: bold; }
 .nav-tab.active { background: #555; color: white; }
-.topbar-right { display: flex; align-items: center; gap: 12px; }
-.topbar-coins { font-weight: bold; font-size: 1.1rem; color: var(--secondary-color); }
-.topbar-progress { display: flex; align-items: center; gap: 8px; }
-.progress-bar-outer { width: 80px; height: 10px; background: rgba(255,255,255,0.2); border-radius: 5px; overflow: hidden; }
+.topbar-right { display: flex; align-items: center; gap: 20px; }
+.topbar-coins { font-weight: bold; font-size: 1.2rem; color: var(--secondary-color); }
+.topbar-progress { display: flex; align-items: center; gap: 10px; }
+.progress-bar-outer { width: 100px; height: 10px; background: rgba(255,255,255,0.2); border-radius: 5px; overflow: hidden; }
 .progress-bar-inner { height: 100%; background: var(--secondary-color); width: 0%; transition: width 0.3s; }
 
 /* TABS */
-.tab-pane { flex: 1; position: relative; display: flex; flex-direction: column; height: auto; min-height: calc(100vh - 60px); }
+.tab-pane { flex: 1; position: relative; display: flex; flex-direction: column; height: calc(100vh - 60px); }
 
 /* ==========================================================================
    ALBUM VISUAL (PANINI STYLE)
    ========================================================================== */
 .album-container { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; position: relative; }
 
-.album-book-wrapper { display: flex; align-items: center; gap: 20px; width: 100%; max-width: 1400px; justify-content: center; perspective: 1500px; }
+.album-book-wrapper { display: flex; align-items: center; gap: 30px; width: 100%; max-width: 1400px; justify-content: center; perspective: 1500px; }
 
-.nav-arrow { background: black; color: white; border: 2px solid white; border-radius: 50%; width: 50px; height: 50px; font-size: 1.5rem; cursor: pointer; display: flex; justify-content: center; align-items: center; transition: 0.2s; box-shadow: 0 5px 15px rgba(0,0,0,0.5); z-index: 10; flex-shrink: 0; }
+.nav-arrow { background: black; color: white; border: 2px solid white; border-radius: 50%; width: 50px; height: 50px; font-size: 1.5rem; cursor: pointer; display: flex; justify-content: center; align-items: center; transition: 0.2s; box-shadow: 0 5px 15px rgba(0,0,0,0.5); z-index: 10; }
 .nav-arrow:hover { transform: scale(1.1); background: #333; }
 
-/* ★ ALBUM-BOOK: nunca más ancho que la pantalla */
-.album-book { display: flex; width: min(1100px, 100%); max-width: 100%; height: auto; min-height: 0; background: #fff; box-shadow: var(--book-shadow); border-radius: 5px; position: relative; }
+.album-book { display: flex; width: 1100px; height: 650px; background: #fff; box-shadow: var(--book-shadow); border-radius: 5px; position: relative; }
 
 .book-spine { position: absolute; left: 50%; top: 0; bottom: 0; width: 40px; transform: translateX(-50%); background: linear-gradient(to right, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0.1) 100%); z-index: 5; box-shadow: inset 0 0 10px rgba(0,0,0,0.2); }
 
-.album-page { flex: 1; min-width: 0; position: relative; background: #fff; overflow: hidden; }
+.album-page { flex: 1; position: relative; background: #fff; overflow: hidden; }
 
 .page-left { border-radius: 5px 0 0 5px; }
 .page-right { border-radius: 0 5px 5px 0; }
@@ -116,7 +95,7 @@ body { font-family: var(--font-main); background-color: var(--bg-color); color: 
 
 .flag-watermark { display: none; }
 
-.page-content { position: relative; z-index: 2; padding: 30px; height: auto; min-height: 400px; display: flex; flex-direction: column; }
+.page-content { position: relative; z-index: 2; padding: 40px; height: 100%; display: flex; flex-direction: column; }
 .right-content { padding-left: 50px; /* Separación del centro */ }
 
 /* HEADER EQUIPO */
@@ -911,10 +890,6 @@ body { font-family: var(--font-main); background-color: var(--bg-color); color: 
   text-decoration: underline;
 }
 
-/* ==========================================================================
-   DISEÑO RESPONSIVO (CELULARES Y TABLETS)
-   ========================================================================== */
-
 /* Botón de música */
 .music-toggle-btn {
   background: rgba(255,255,255,0.1);
@@ -936,13 +911,19 @@ body { font-family: var(--font-main); background-color: var(--bg-color); color: 
   transform: scale(1.1);
 }
 
-@media (max-width: 580px), (max-height: 480px) {
+/* ==========================================================================
+   DISEÑO RESPONSIVO (CELULARES Y TABLETS)
+   ========================================================================== */
+
+/* Ajustes globales de escala de figuritas en pantallas pequeñas (Celulares en vertical o landscape muy corto) */
+@media (max-width: 580px), (max-width: 1024px) and (max-height: 480px) {
   :root {
     --sticker-width: 85px !important;
     --sticker-height: 119px !important;
   }
 }
 
+/* Ajustes globales de escala de figuritas en pantallas medianas (Tablets) */
 @media (min-width: 581px) and (max-width: 1024px) and (min-height: 481px) {
   :root {
     --sticker-width: 95px !important;
@@ -950,8 +931,12 @@ body { font-family: var(--font-main); background-color: var(--bg-color); color: 
   }
 }
 
-@media (max-width: 1024px), (max-height: 600px) {
-
+/* Reglas de diseño responsivo aplicadas a:
+   1. Pantallas angostas (celulares en vertical) -> max-width: 768px
+   2. Pantallas medianas que además son bajas (celulares en landscape) -> max-width: 1024px y max-height: 600px
+*/
+@media (max-width: 768px), (max-width: 1024px) and (max-height: 600px) {
+  
   /* BODY Y SCROLL */
   body {
     overflow-x: hidden !important;
@@ -1030,30 +1015,6 @@ body { font-family: var(--font-main); background-color: var(--bg-color); color: 
   .progress-bar-outer {
     width: 60px !important;
   }
-}
-
-/* Si es celular en vertical (portrait), apilamos la topbar */
-@media (max-width: 580px) and (min-height: 481px) {
-  .topbar {
-    flex-direction: column !important;
-    align-items: stretch !important;
-    gap: 8px !important;
-    padding: 8px 12px !important;
-  }
-  .topbar-left {
-    justify-content: center !important;
-  }
-  .topbar-center {
-    width: 100% !important;
-    margin: 0 !important;
-  }
-  .topbar-right {
-    width: 100% !important;
-    justify-content: space-between !important;
-  }
-  .progress-bar-outer {
-    width: 80px !important;
-  }
 
   /* ===== ÁLBUM ===== */
   .album-container {
@@ -1070,7 +1031,7 @@ body { font-family: var(--font-main); background-color: var(--bg-color); color: 
     perspective: none !important;
   }
 
-  /* ★ CLAVE: pisar los 1100px y 650px fijos */
+  /* El lomo se oculta en vista de pila vertical */
   .album-book {
     flex-direction: column !important;
     width: 100% !important;
@@ -1346,3 +1307,29 @@ body { font-family: var(--font-main); background-color: var(--bg-color); color: 
     font-size: 1.2rem !important;
   }
 }
+
+/* Si es celular en vertical (portrait), apilamos la topbar */
+@media (max-width: 580px) and (min-height: 481px) {
+  .topbar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+    padding: 8px 12px !important;
+  }
+  .topbar-left {
+    justify-content: center !important;
+  }
+  .topbar-center {
+    width: 100% !important;
+    margin: 0 !important;
+  }
+  .topbar-right {
+    width: 100% !important;
+    justify-content: space-between !important;
+  }
+  .progress-bar-outer {
+    width: 80px !important;
+  }
+}
+
+
