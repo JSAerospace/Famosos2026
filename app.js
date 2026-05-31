@@ -136,8 +136,11 @@ window.handleImageError = function(img, basePath) {
     if (img.fallbackIdx < exts.length) {
         img.src = basePath + exts[img.fallbackIdx++];
     } else {
-        img.onerror = null; // Evitar loop infinito
-        img.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="120" height="168"><rect width="100%" height="100%" fill="%23ddd"/><text x="50%" y="50%" font-family="sans-serif" font-size="14" fill="%23666" text-anchor="middle" dy=".3em">Falta Imagen</text></svg>';
+        // Todos los formatos fallaron: ocultar la imagen rota y marcar el slot
+        img.onerror = null;
+        img.style.display = 'none';
+        const parent = img.closest('.sticker-card') || img.parentElement;
+        if (parent) parent.classList.add('slot-img-missing');
     }
 };
 
