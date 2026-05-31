@@ -1,0 +1,13 @@
+INSTRUCCIONES PARA TUS FIGURITAS PERSONALIZADAS:
+
+1. Coloca las 11 figuritas de Argentina en esta carpeta.
+2. Nómbralas exactamente del 1 al 11.
+   Ejemplo:
+   - 1.png   (Dibu Martínez)
+   - 2.png   (Nahuel Molina)
+   - ...
+   - 11.png  (Ángel Di María)
+3. La aplicación está configurada para buscar imágenes con formato ".png". Puedes usar imágenes transparentes para lograr un diseño espectacular de carta. 
+4. Si quieres usar otro formato como ".jpg", asegúrate de colocar archivos con extensión .png falsos (renombrando el archivo .jpg a .png) o edita la función `renderPlayerImage` en el archivo `app.js` para adaptarlo.
+
+¡Disfruta coleccionando tus propias figuritas!
