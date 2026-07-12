@@ -328,7 +328,10 @@ function switchTab(tabId) {
   if (tabId === 'album') renderAlbumPage();
   if (tabId === 'duplicates') renderDuplicates();
   if (tabId === 'trade') renderTradePage();
-  if (tabId === 'admin') adminLoadCodes();
+  if (tabId === 'admin') {
+    adminLoadCodes();
+    adminLoadUsers();
+  }
 }
 
 function updateTopBar() {
@@ -1028,6 +1031,80 @@ async function adminDeleteCode(code) {
     adminLoadCodes();
   } catch(e) {
     showToast('Error al eliminar.', 'error');
+  }
+}
+
+// === GESTIÓN DE USUARIOS ===
+async function adminLoadUsers() {
+  if (!_isAdmin() || !_fbDb) return;
+  const listEl = document.getElementById('admin-users-list');
+  if(!listEl) return;
+  listEl.innerHTML = '<p style="color:#555; font-size:0.85rem;">Cargando usuarios...</p>';
+  try {
+    const snap = await _fbDb.collection('albums').limit(100).get();
+    if (snap.empty) {
+      listEl.innerHTML = '<p style="color:#555; font-size:0.85rem;">No hay usuarios todavía.</p>';
+      return;
+    }
+    listEl.innerHTML = '';
+    snap.forEach(doc => {
+      const d = doc.data();
+      const uid = doc.id;
+      const email = d.email || 'Desconocido';
+      const name = d.name || 'Sin Nombre';
+      const coins = d.coins || 0;
+      
+      const pastedCount = d.pasted ? Object.keys(d.pasted).length : 0;
+      
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex; flex-direction:column; background:rgba(255,255,255,0.06); padding:10px 14px; border-radius:8px; font-size:0.9rem; margin-bottom:8px;';
+      
+      row.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <div>
+            <div style="color:#fff; font-weight:bold;">${name}</div>
+            <div style="color:#aaa; font-size:0.8rem;">${email} • ID: <span style="font-family:monospace;">${uid.substring(0,8)}...</span></div>
+          </div>
+          <div style="text-align:right;">
+            <div style="color:#ffd700; font-weight:bold; margin-bottom:3px;">🪙 ${coins}</div>
+            <div style="color:#28a745; font-size:0.75rem;">${pastedCount} figuritas pegadas</div>
+          </div>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button onclick="adminEditUserCoins('${uid}', ${coins})" style="background:rgba(255,215,0,0.2); border:1px solid #ffd700; color:#ffd700; padding:4px 10px; border-radius:5px; cursor:pointer; font-size:0.8rem; flex:1;">💰 Modificar Monedas</button>
+        </div>
+      `;
+      listEl.appendChild(row);
+    });
+  } catch(e) {
+    listEl.innerHTML = '<p style="color:#dc3545; font-size:0.85rem;">Error cargando usuarios.</p>';
+    console.error(e);
+  }
+}
+
+async function adminEditUserCoins(uid, currentCoins) {
+  if (!_isAdmin() || !_fbDb) return;
+  const newValue = prompt('Ingresá la nueva cantidad de monedas para este usuario:', currentCoins);
+  if (newValue === null || newValue === '') return;
+  const coins = parseInt(newValue, 10);
+  if (isNaN(coins) || coins < 0) {
+    showToast('Cantidad inválida.', 'error');
+    return;
+  }
+  
+  try {
+    await _fbDb.collection('albums').doc(uid).update({ coins: coins });
+    showToast('¡Monedas actualizadas!', 'success');
+    
+    if (uid === _currentUser.uid) {
+      state.coins = coins;
+      saveState();
+    }
+    
+    adminLoadUsers();
+  } catch(e) {
+    showToast('Error al actualizar monedas.', 'error');
+    console.error(e);
   }
 }
 
