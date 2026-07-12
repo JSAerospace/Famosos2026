@@ -590,11 +590,20 @@ function openPack() {
   showToast("¡Compraste 1 sobre! Abrilo abajo.");
 }
 
+let isOpeningPack = false;
+
 function triggerPackOpening() {
+  if (isOpeningPack) return;
   if ((state.unopenedPacks || 0) <= 0) {
     showToast("No tenés sobres para abrir.", "error");
     return;
   }
+  
+  isOpeningPack = true;
+  const btn = document.getElementById('open-stacked-btn');
+  if (btn) btn.disabled = true;
+  if (btn) btn.style.opacity = '0.5';
+  if (btn) btn.style.cursor = 'not-allowed';
   
   state.unopenedPacks--;
   state.openedPacksCount++;
@@ -675,6 +684,13 @@ function revealCards() {
   }
   
   saveState();
+  
+  // Habilitar botón para el siguiente sobre
+  isOpeningPack = false;
+  const btn = document.getElementById('open-stacked-btn');
+  if (btn) btn.disabled = false;
+  if (btn) btn.style.opacity = '1';
+  if (btn) btn.style.cursor = 'pointer';
 }
 
 // ==========================================================================
