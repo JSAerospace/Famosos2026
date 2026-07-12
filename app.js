@@ -46,7 +46,7 @@ async function handleAuthStateChanged(user) {
   // Mostrar tab de admin solo para el administrador
   const adminBtn = document.getElementById('admin-tab-btn');
   if (adminBtn) {
-    if (user && user.email === 'olanoagus@gmail.com') {
+    if (user && ADMIN_EMAILS.includes(user.email)) {
       adminBtn.classList.remove('hidden');
     } else {
       adminBtn.classList.add('hidden');
@@ -773,10 +773,11 @@ async function redeemCode() {
 // ==========================================================================
 // PANEL DE ADMIN
 // ==========================================================================
-const ADMIN_EMAIL = 'olanoagus@gmail.com';
+const ADMIN_EMAIL  = 'olanoagus@gmail.com';
+const ADMIN_EMAILS = ['olanoagus@gmail.com', 'franantolini3@gmail.com'];
 
 function _isAdmin() {
-  return _currentUser && _currentUser.email === ADMIN_EMAIL;
+  return _currentUser && ADMIN_EMAILS.includes(_currentUser.email.toLowerCase());
 }
 
 function setAdminAmount(amount) {
