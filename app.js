@@ -46,9 +46,7 @@ async function handleAuthStateChanged(user) {
   // Mostrar tab de admin solo para el administrador
   const adminBtn = document.getElementById('admin-tab-btn');
   if (adminBtn) {
-    if (!window.isFirebaseConfigured || !window.isFirebaseConfigured()) {
-      adminBtn.classList.remove('hidden');
-    } else if (user && user.email === 'franantolini3@gmail.com') {
+    if (_isAdmin()) {
       adminBtn.classList.remove('hidden');
     } else {
       adminBtn.classList.add('hidden');
