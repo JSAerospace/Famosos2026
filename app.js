@@ -57,6 +57,8 @@ async function handleAuthStateChanged(user) {
     await loadStateFromCloud(user.uid);
     renderAlbumPage();
     updateTopBar();
+    // Forzamos un guardado para registrar su email/nombre en Firestore si no estaba
+    saveToCloud(user.uid);
   }
 }
 
