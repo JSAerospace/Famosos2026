@@ -969,7 +969,7 @@ async function adminGenerateCode() {
       await _fbDb.collection('promoCodes').doc(code).set({
         coins,
         used: false,
-        createdBy: ADMIN_EMAIL,
+        createdBy: _currentUser ? _currentUser.email : 'admin',
         createdAt: Date.now()
       });
       displayEl.textContent = code;
