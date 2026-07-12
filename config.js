@@ -72,6 +72,16 @@ const ALBUM_CONFIG = {
             flags: ['COL', 'GRE', 'CIV', 'JPN']
         },
         {
+            id: 'inglaterra',
+            name: 'Inglaterra',
+            flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿',
+            federation: 'The Football Association',
+            group: 'GROUP C',
+            color1: '#CF091D',
+            color2: '#ffffff',
+            flags: ['ENG', 'USA', 'IRN', 'WAL']
+        },
+        {
             id: 'extrastickers',
             name: 'Extra Stickers',
             flag: '⭐',
