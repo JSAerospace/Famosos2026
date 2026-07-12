@@ -43,14 +43,16 @@ function initFirebase() {
 async function handleAuthStateChanged(user) {
   _currentUser = user;
   renderUserTopbar();
-  // Mostrar tab de admin solo para el administrador
+  // Mostrar tab de admin e intercambio solo para el administrador
   const adminBtn = document.getElementById('admin-tab-btn');
-  if (adminBtn) {
-    if (_isAdmin()) {
-      adminBtn.classList.remove('hidden');
-    } else {
-      adminBtn.classList.add('hidden');
-    }
+  const tradeBtn = document.getElementById('trade-tab-btn');
+  
+  if (_isAdmin()) {
+    if (adminBtn) adminBtn.classList.remove('hidden');
+    if (tradeBtn) tradeBtn.classList.remove('hidden');
+  } else {
+    if (adminBtn) adminBtn.classList.add('hidden');
+    if (tradeBtn) tradeBtn.classList.add('hidden');
   }
   if (user) {
     // Cargamos el progreso desde la nube al iniciar sesión
@@ -327,7 +329,7 @@ function switchTab(tabId) {
   
   if (tabId === 'album') renderAlbumPage();
   if (tabId === 'duplicates') renderDuplicates();
-  if (tabId === 'trade') renderTradePage();
+  if (tabId === 'trade' && _isAdmin()) renderTradePage();
   if (tabId === 'admin') {
     adminLoadCodes();
     adminLoadUsers();

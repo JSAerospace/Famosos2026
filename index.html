@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,400;0,700;1,900&family=Orbitron:wght@700;900&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=1.1.2" />
+  <link rel="stylesheet" href="styles.css?v=1.1.3" />
 </head>
 <body>
 
@@ -22,7 +22,7 @@
         <!-- TABS DE NAVEGACIÓN -->
         <nav class="nav-tabs">
             <button class="nav-tab active" data-tab="album" onclick="switchTab('album')">📖 Álbum</button>
-            <button class="nav-tab" data-tab="trade" onclick="switchTab('trade')">🤝 Intercambio <span class="trade-badge" id="trade-badge" style="display:none;"></span></button>
+            <button class="nav-tab hidden" id="trade-tab-btn" data-tab="trade" onclick="switchTab('trade')">🤝 Intercambio <span class="trade-badge" id="trade-badge" style="display:none;"></span></button>
             <button class="nav-tab" data-tab="packs" onclick="switchTab('packs')">📦 Sobres</button>
             <button class="nav-tab" data-tab="duplicates" onclick="switchTab('duplicates')">🔄 Repetidas <span class="dup-badge" id="dup-badge"></span></button>
             <button class="nav-tab" data-tab="codes" onclick="switchTab('codes')">🎟️ Códigos</button>
@@ -375,9 +375,9 @@
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
-<script src="firebase-config.js?v=1.1.2"></script>
-<script src="config.js?v=1.1.2"></script>
-<script src="app.js?v=1.1.2"></script>
+<script src="firebase-config.js?v=1.1.3"></script>
+<script src="config.js?v=1.1.3"></script>
+<script src="app.js?v=1.1.3"></script>
 <audio id="bg-music" src="mi-album/Landing_Burn.mp3" loop preload="auto"></audio>
 </body>
 </html>
