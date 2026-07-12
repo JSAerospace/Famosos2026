@@ -16,4 +16,3 @@ window.firebaseConfig = {
 window.isFirebaseConfigured = function() {
   return true;
 };
-

@@ -46,7 +46,9 @@ async function handleAuthStateChanged(user) {
   // Mostrar tab de admin solo para el administrador
   const adminBtn = document.getElementById('admin-tab-btn');
   if (adminBtn) {
-    if (user && ADMIN_EMAILS.includes(user.email)) {
+    if (!window.isFirebaseConfigured || !window.isFirebaseConfigured()) {
+      adminBtn.classList.remove('hidden');
+    } else if (user && user.email === 'franantolini3@gmail.com') {
       adminBtn.classList.remove('hidden');
     } else {
       adminBtn.classList.add('hidden');
@@ -57,8 +59,6 @@ async function handleAuthStateChanged(user) {
     await loadStateFromCloud(user.uid);
     renderAlbumPage();
     updateTopBar();
-    // Forzamos un guardado para registrar su email/nombre en Firestore si no estaba
-    saveToCloud(user.uid);
   }
 }
 
@@ -94,13 +94,13 @@ function saveToCloud(uid) {
   if (!_fbDb || !uid) return;
   clearTimeout(_saveDebounceTimer);
   _saveDebounceTimer = setTimeout(() => {
-    const dataToSave = { ...state };
-    if (_currentUser) {
-      dataToSave.email = _currentUser.email;
-      dataToSave.name = _currentUser.displayName || _currentUser.email.split('@')[0];
-      dataToSave.lastSync = Date.now();
-    }
-    _fbDb.collection('albums').doc(uid).set(dataToSave)
+    const payload = {
+      ...state,
+      email: _currentUser ? _currentUser.email : null,
+      displayName: _currentUser ? _currentUser.displayName : null,
+      lastUpdated: Date.now()
+    };
+    _fbDb.collection('albums').doc(uid).set(payload)
       .then(() => console.log('[Album] Progreso sincronizado en la nube.'))
       .catch(e => console.error('[Album] Error al guardar en Firestore:', e));
   }, 1500);
@@ -131,12 +131,17 @@ let state = {
   pasted: {},      // "equipoId_numero": true
   inventory: {},   // "equipoId_numero": cantidad
   openedPacksCount: 0,
-  unopenedPacks: 0,
   dailyCooldown: null,
-  usedCodes: {}    // "codigo": true
+  usedCodes: {},    // "codigo": true
+  tradesToday: 0,   // intercambios realizados hoy
+  tradeDate: null   // fecha del último reset de tradesToday
 };
 
 let currentTeamIndex = 0;
+let _tradeMode = 'single'; // 'single' | 'multi'
+let _selectedOffer = [];   // keys de figuritas ofrecidas
+let _selectedWant = [];    // keys de figuritas pedidas
+let _tradesUnsubscribe = null; // para limpiar listener de Firestore
 
 // Manejador global para probar múltiples extensiones si la primera falla (.png -> .jpg -> .jpeg etc)
 window.handleImageError = function(img, basePath) {
@@ -249,6 +254,16 @@ document.addEventListener('DOMContentLoaded', () => {
   renderTeamIndicators();
   updateTimer();
   
+  // Si Firebase está desactivado localmente, mostrar la pestaña de admin de una vez
+  if (!window.isFirebaseConfigured || !window.isFirebaseConfigured()) {
+    const adminBtn = document.getElementById('admin-tab-btn');
+    if (adminBtn) adminBtn.classList.remove('hidden');
+  }
+  
+  // Renderizar inventario de sobres y configurar Zona de Apertura
+  renderPacksInventory();
+  updatePackStage();
+  
   // Iniciar la precarga en segundo plano tras inicializar la app
   preloadAllStickers();
 });
@@ -266,9 +281,17 @@ function loadState() {
       }
     } catch(e){}
   }
-  // Asegurar que exista el objeto de códigos usados
+  // Asegurar que exista el objeto de códigos usados y packs acumulados
   state.usedCodes = state.usedCodes || {};
-  state.unopenedPacks = state.unopenedPacks || 0;
+  state.tradesToday = state.tradesToday || 0;
+  state.tradeDate = state.tradeDate || null;
+  state.packs = state.packs !== undefined ? state.packs : 0;
+  // Reset diario de trades
+  const todayStr = new Date().toISOString().slice(0, 10);
+  if (state.tradeDate !== todayStr) {
+    state.tradesToday = 0;
+    state.tradeDate = todayStr;
+  }
 }
 
 function saveState() {
@@ -306,10 +329,8 @@ function switchTab(tabId) {
   
   if (tabId === 'album') renderAlbumPage();
   if (tabId === 'duplicates') renderDuplicates();
-  if (tabId === 'admin') {
-    adminLoadCodes();
-    adminLoadUsers();
-  }
+  if (tabId === 'trade') renderTradePage();
+  if (tabId === 'admin') adminLoadCodes();
 }
 
 function updateTopBar() {
@@ -329,23 +350,6 @@ function updateTopBar() {
   const badge = document.getElementById('dup-badge');
   badge.textContent = dupCount;
   badge.style.display = dupCount > 0 ? 'inline-block' : 'none';
-  
-  updateUnopenedPacksUI();
-}
-
-function updateUnopenedPacksUI() {
-  const count = state.unopenedPacks || 0;
-  const btn = document.getElementById('open-stacked-btn');
-  const sub = document.getElementById('stacked-count-sub');
-  
-  if (btn && sub) {
-    if (count > 0) {
-      btn.classList.remove('hidden');
-      sub.textContent = `${count} disponibles`;
-    } else {
-      btn.classList.add('hidden');
-    }
-  }
 }
 
 function countTotalDuplicates() {
@@ -570,57 +574,99 @@ function claimFreePack() {
   
   // Establecer el tiempo de espera en 2 horas desde ahora
   state.dailyCooldown = now + (2 * 60 * 60 * 1000);
-  state.unopenedPacks = (state.unopenedPacks || 0) + 1;
+  state.packs = (state.packs || 0) + 1;
   saveState();
   
-  showToast("¡Obtuviste 1 sobre! Abrilo ahora.");
+  showToast("¡Sobre gratis reclamado!");
   updateTimer(); // Forzar actualización visual inmediata
+  renderPacksInventory();
+  updatePackStage();
 }
 
-function openPack() {
+function buyPack() {
   if (state.coins < 100) {
     showToast("No tenés monedas suficientes.", "error");
     return;
   }
   
   state.coins -= 100;
-  state.unopenedPacks = (state.unopenedPacks || 0) + 1;
+  state.packs = (state.packs || 0) + 1;
   saveState();
   
-  showToast("¡Compraste 1 sobre! Abrilo abajo.");
+  showToast("¡Sobre comprado!");
+  renderPacksInventory();
+  updatePackStage();
 }
 
-let isOpeningPack = false;
-
-function triggerPackOpening() {
-  if (isOpeningPack) return;
-  if ((state.unopenedPacks || 0) <= 0) {
-    showToast("No tenés sobres para abrir.", "error");
-    return;
+function renderPacksInventory() {
+  const label = document.getElementById('packs-count-label');
+  if (label) {
+    label.textContent = state.packs || 0;
   }
-  
-  isOpeningPack = true;
-  const btn = document.getElementById('open-stacked-btn');
-  if (btn) btn.disabled = true;
-  if (btn) btn.style.opacity = '0.5';
-  if (btn) btn.style.cursor = 'not-allowed';
-  
-  state.unopenedPacks--;
-  state.openedPacksCount++;
-  saveState();
-  
-  // Mostrar sobre
-  document.getElementById('pack-idle-hint').classList.add('hidden');
+}
+
+function updatePackStage() {
+  const idleHint = document.getElementById('pack-idle-hint');
   const env = document.getElementById('pack-envelope');
-  env.classList.remove('hidden', 'tearing', 'torn');
-  document.getElementById('revealed-cards').classList.add('hidden');
-  document.getElementById('revealed-cards').innerHTML = '';
+  const revealed = document.getElementById('revealed-cards');
+  
+  if (!idleHint || !env || !revealed) return;
+
+  // Si hay cartas reveladas en pantalla, no hacemos nada para no borrárselas al usuario
+  if (!revealed.classList.contains('hidden') && revealed.innerHTML !== '') return;
+
+  if ((state.packs || 0) > 0) {
+    idleHint.classList.add('hidden');
+    env.classList.remove('hidden', 'tearing', 'torn');
+    revealed.classList.add('hidden');
+    revealed.innerHTML = '';
+    
+    // Opcional: Agregar hint visual para avisarle al usuario que tiene sobres listos
+    let titleEl = env.querySelector('.pack-hint-overlay');
+    if (!titleEl) {
+      titleEl = document.createElement('div');
+      titleEl.className = 'pack-hint-overlay';
+      titleEl.style.position = 'absolute';
+      titleEl.style.bottom = '15px';
+      titleEl.style.left = '50%';
+      titleEl.style.transform = 'translateX(-50%)';
+      titleEl.style.background = 'rgba(0,0,0,0.7)';
+      titleEl.style.color = '#ffd700';
+      titleEl.style.padding = '8px 16px';
+      titleEl.style.borderRadius = '20px';
+      titleEl.style.fontFamily = 'var(--font-title)';
+      titleEl.style.fontSize = '0.75rem';
+      titleEl.style.fontWeight = 'bold';
+      titleEl.style.whiteSpace = 'nowrap';
+      titleEl.style.border = '1px solid rgba(255,215,0,0.3)';
+      titleEl.style.pointerEvents = 'none';
+      titleEl.textContent = '¡TOCÁ EL SOBRE PARA ABRIRLO!';
+      env.appendChild(titleEl);
+    }
+  } else {
+    idleHint.classList.remove('hidden');
+    env.classList.add('hidden');
+    revealed.classList.add('hidden');
+    revealed.innerHTML = '';
+  }
 }
 
 function tearPack() {
   const env = document.getElementById('pack-envelope');
   if (env.classList.contains('tearing') || env.classList.contains('torn')) return;
   
+  if ((state.packs || 0) <= 0) {
+    showToast("No tenés sobres disponibles para abrir.", "error");
+    updatePackStage();
+    return;
+  }
+
+  // Descontar sobre
+  state.packs--;
+  state.openedPacksCount++;
+  saveState();
+  renderPacksInventory();
+
   env.classList.add('tearing');
   
   setTimeout(() => {
@@ -641,8 +687,16 @@ function revealCards() {
   const cardsInPack = new Set();
   let cardsGenerated = 0;
   
+  // Contenedor interno para centrar las 5 cartas
+  const gridDiv = document.createElement('div');
+  gridDiv.style.display = 'flex';
+  gridDiv.style.flexWrap = 'wrap';
+  gridDiv.style.justifyContent = 'center';
+  gridDiv.style.gap = '15px';
+  gridDiv.style.width = '100%';
+  container.appendChild(gridDiv);
+
   while(cardsGenerated < 5) {
-    // 1% de probabilidad de que cada carta sea Extra Sticker (promedia 1 de cada 20 sobres de 5 cartas: 5 * 1% = 5%)
     let team;
     if (Math.random() < 0.01) {
       team = ALBUM_CONFIG.teams.find(t => t.id === 'extrastickers');
@@ -656,13 +710,11 @@ function revealCards() {
     const cardKey = `${team.id}_${num}`;
     
     if (cardsInPack.has(cardKey)) {
-        continue; // Si ya salió en este sobre, intentamos de nuevo
+        continue;
     }
     cardsInPack.add(cardKey);
     
-    // Determinar si la figurita es NUEVA (no la tiene pegada ni en el inventario)
     const isNew = !state.pasted[cardKey] && (state.inventory[cardKey] || 0) === 0;
-    
     state.inventory[cardKey] = (state.inventory[cardKey] || 0) + 1;
     
     const basePath = `${ALBUM_CONFIG.basePath}/${team.id}/${num}`;
@@ -678,19 +730,59 @@ function revealCards() {
         <img src="${imgSrc}" class="sticker-img" onerror="window.handleImageError(this, '${basePath}')" onload="window.handleImageSuccess(this, '${basePath}')"/>
       </div>
     `;
-    container.appendChild(div);
+    gridDiv.appendChild(div);
     
     cardsGenerated++;
   }
   
-  saveState();
+  // Agregar botón para continuar o abrir otro sobre al final de la visualización
+  const actionRow = document.createElement('div');
+  actionRow.style.width = '100%';
+  actionRow.style.display = 'flex';
+  actionRow.style.justifyContent = 'center';
+  actionRow.style.marginTop = '25px';
+  actionRow.style.animation = 'fadeIn 0.5s ease-out both';
+  actionRow.style.animationDelay = '1.2s';
   
-  // Habilitar botón para el siguiente sobre
-  isOpeningPack = false;
-  const btn = document.getElementById('open-stacked-btn');
-  if (btn) btn.disabled = false;
-  if (btn) btn.style.opacity = '1';
-  if (btn) btn.style.cursor = 'pointer';
+  const hasMorePacks = (state.packs || 0) > 0;
+  const btnText = hasMorePacks ? `Abrir otro sobre (${state.packs} disp.)` : 'Continuar';
+  
+  const actionBtn = document.createElement('button');
+  actionBtn.style.padding = '12px 30px';
+  actionBtn.style.background = hasMorePacks ? 'linear-gradient(135deg, #ffd700, #ff9500)' : 'rgba(255, 255, 255, 0.1)';
+  actionBtn.style.color = hasMorePacks ? '#12051a' : 'white';
+  actionBtn.style.border = hasMorePacks ? 'none' : '1px solid rgba(255, 255, 255, 0.2)';
+  actionBtn.style.borderRadius = '8px';
+  actionBtn.style.fontWeight = 'bold';
+  actionBtn.style.fontFamily = 'var(--font-title)';
+  actionBtn.style.fontSize = '0.9rem';
+  actionBtn.style.cursor = 'pointer';
+  actionBtn.style.textTransform = 'uppercase';
+  actionBtn.style.letterSpacing = '1px';
+  actionBtn.style.transition = '0.2s';
+  actionBtn.textContent = btnText;
+  
+  actionBtn.onmouseover = () => {
+    actionBtn.style.transform = 'scale(1.05)';
+    if (hasMorePacks) {
+      actionBtn.style.boxShadow = '0 0 15px rgba(255, 215, 0, 0.4)';
+    }
+  };
+  actionBtn.onmouseout = () => {
+    actionBtn.style.transform = 'scale(1)';
+    actionBtn.style.boxShadow = 'none';
+  };
+  
+  actionBtn.onclick = () => {
+    container.classList.add('hidden');
+    container.innerHTML = '';
+    updatePackStage();
+  };
+  
+  actionRow.appendChild(actionBtn);
+  container.appendChild(actionRow);
+  
+  saveState();
 }
 
 // ==========================================================================
@@ -734,7 +826,6 @@ function renderDuplicates() {
 
 function sellAllDuplicates() {
   let sold = 0;
-  let earnedCoins = 0;
   for(const key in state.inventory) {
     const pasted = !!state.pasted[key];
     const inv = state.inventory[key] || 0;
@@ -744,19 +835,13 @@ function sellAllDuplicates() {
     if(repetidas > 0) {
       sold += repetidas;
       state.inventory[key] -= repetidas;
-      
-      if (key.startsWith('extrastickers_')) {
-        earnedCoins += (repetidas * 100);
-      } else {
-        earnedCoins += (repetidas * 15);
-      }
     }
   }
   
   if (sold > 0) {
-    state.coins += earnedCoins;
+    state.coins += (sold * 15);
     saveState();
-    showToast(`Vendiste ${sold} repetidas por ${earnedCoins}🪙.`);
+    showToast(`Vendiste ${sold} repetidas.`);
     renderDuplicates();
   } else {
     showToast("No tenés repetidas.", "error");
@@ -832,11 +917,14 @@ async function redeemCode() {
 // ==========================================================================
 // PANEL DE ADMIN
 // ==========================================================================
-const ADMIN_EMAIL  = 'olanoagus@gmail.com';
-const ADMIN_EMAILS = ['olanoagus@gmail.com', 'franantolini3@gmail.com'];
+const ADMIN_EMAILS = ['franantolini3@gmail.com', 'olanoagus@gmail.com'];
+let _adminEditingUser = null; // Guardar estado del usuario que se está editando
 
 function _isAdmin() {
-  return _currentUser && ADMIN_EMAILS.includes(_currentUser.email.toLowerCase());
+  if (!window.isFirebaseConfigured || !window.isFirebaseConfigured()) {
+    return true; // Acceso total si Firebase está desactivado localmente
+  }
+  return _currentUser && ADMIN_EMAILS.includes(_currentUser.email);
 }
 
 function setAdminAmount(amount) {
@@ -944,79 +1032,193 @@ async function adminDeleteCode(code) {
   }
 }
 
-// === GESTIÓN DE USUARIOS ===
-async function adminLoadUsers() {
-  if (!_isAdmin() || !_fbDb) return;
-  const listEl = document.getElementById('admin-users-list');
-  listEl.innerHTML = '<p style="color:#555; font-size:0.85rem;">Cargando usuarios...</p>';
+// --- GESTIÓN DE INVENTARIOS DE USUARIO DESDE EL PANEL DE ADMIN ---
+async function adminSearchUser() {
+  if (!_isAdmin()) { showToast('No autorizado.', 'error'); return; }
+  const searchInput = document.getElementById('admin-user-email-input').value.trim();
+  if (!searchInput) {
+    showToast('Ingresá un correo o UID para buscar.', 'error');
+    return;
+  }
+
+  const resultBox = document.getElementById('admin-user-result');
+  const foundEmailEl = document.getElementById('admin-user-found-email');
+  const foundUidEl = document.getElementById('admin-user-found-uid');
+  const coinsInput = document.getElementById('admin-user-coins');
+  const packsInput = document.getElementById('admin-user-packs');
+
+  resultBox.classList.add('hidden');
+
+  if (!_fbDb) {
+    showToast('Firebase no está activo localmente. No se puede buscar en la nube.', 'error');
+    return;
+  }
+
+  showToast('Buscando usuario...', 'success');
+
   try {
-    const snap = await _fbDb.collection('albums').limit(100).get();
-    if (snap.empty) {
-      listEl.innerHTML = '<p style="color:#555; font-size:0.85rem;">No hay usuarios todavía.</p>';
+    let docSnap = null;
+    let uid = null;
+    let data = null;
+
+    // 1. Intentar buscar por campo 'email'
+    const querySnap = await _fbDb.collection('albums').where('email', '==', searchInput).get();
+    if (!querySnap.empty) {
+      const doc = querySnap.docs[0];
+      uid = doc.id;
+      data = doc.data();
+    } else {
+      // 2. Si no encuentra por email, buscar por UID del documento directo
+      const directDoc = await _fbDb.collection('albums').doc(searchInput).get();
+      if (directDoc.exists) {
+        uid = directDoc.id;
+        data = directDoc.data();
+      }
+    }
+
+    if (!uid || !data) {
+      showToast('No se encontró ningún usuario con ese correo o UID.', 'error');
       return;
     }
-    listEl.innerHTML = '';
-    snap.forEach(doc => {
-      const d = doc.data();
-      const uid = doc.id;
-      const email = d.email || 'Desconocido';
-      const name = d.name || 'Sin Nombre';
-      const coins = d.coins || 0;
-      
-      const pastedCount = d.pasted ? Object.keys(d.pasted).length : 0;
-      
-      const row = document.createElement('div');
-      row.style.cssText = 'display:flex; flex-direction:column; background:rgba(255,255,255,0.06); padding:10px 14px; border-radius:8px; font-size:0.9rem;';
-      
-      row.innerHTML = `
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-          <div>
-            <div style="color:#fff; font-weight:bold;">${name}</div>
-            <div style="color:#aaa; font-size:0.8rem;">${email} • ID: <span style="font-family:monospace;">${uid.substring(0,8)}...</span></div>
-          </div>
-          <div style="text-align:right;">
-            <div style="color:#ffd700; font-weight:bold; margin-bottom:3px;">🪙 ${coins}</div>
-            <div style="color:#28a745; font-size:0.75rem;">${pastedCount} figuritas pegadas</div>
-          </div>
-        </div>
-        <div style="display:flex; gap:8px;">
-          <button onclick="adminEditUserCoins('${uid}', ${coins})" style="background:rgba(255,215,0,0.2); border:1px solid #ffd700; color:#ffd700; padding:4px 10px; border-radius:5px; cursor:pointer; font-size:0.8rem; flex:1;">💰 Modificar Monedas</button>
-        </div>
-      `;
-      listEl.appendChild(row);
-    });
-  } catch(e) {
-    listEl.innerHTML = '<p style="color:#dc3545; font-size:0.85rem;">Error cargando usuarios.</p>';
-    console.error(e);
+
+    // Cargar datos en la variable global de edición
+    _adminEditingUser = {
+      uid: uid,
+      data: {
+        coins: data.coins !== undefined ? data.coins : 500,
+        packs: data.packs !== undefined ? data.packs : 0,
+        pasted: data.pasted || {},
+        inventory: data.inventory || {},
+        openedPacksCount: data.openedPacksCount || 0,
+        usedCodes: data.usedCodes || {},
+        tradesToday: data.tradesToday || 0,
+        tradeDate: data.tradeDate || null,
+        email: data.email || searchInput,
+        displayName: data.displayName || null
+      }
+    };
+
+    // Llenar campos de la UI
+    foundEmailEl.textContent = _adminEditingUser.data.email || 'Sin correo asociado';
+    foundUidEl.textContent = `UID: ${uid}`;
+    coinsInput.value = _adminEditingUser.data.coins;
+    packsInput.value = _adminEditingUser.data.packs;
+
+    // Llenar selectores de figuritas
+    adminPopulateStickerSelectors();
+
+    // Mostrar el contenedor de resultados
+    resultBox.classList.remove('hidden');
+    showToast('Usuario cargado correctamente.');
+  } catch (e) {
+    console.error('[Admin] Error buscando usuario:', e);
+    showToast('Error al buscar usuario en la base de datos.', 'error');
   }
 }
 
-async function adminEditUserCoins(uid, currentCoins) {
-  if (!_isAdmin() || !_fbDb) return;
-  const newValue = prompt('Ingresá la nueva cantidad de monedas para este usuario:', currentCoins);
-  if (newValue === null || newValue === '') return;
-  const coins = parseInt(newValue, 10);
-  if (isNaN(coins) || coins < 0) {
-    showToast('Cantidad inválida.', 'error');
-    return;
-  }
+function adminPopulateStickerSelectors() {
+  const teamSel = document.getElementById('admin-user-sticker-team');
+  const numSel = document.getElementById('admin-user-sticker-num');
+  if (!teamSel || !numSel) return;
+
+  teamSel.innerHTML = '';
+  ALBUM_CONFIG.teams.forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t.id;
+    opt.textContent = t.name;
+    teamSel.appendChild(opt);
+  });
+
+  adminOnTeamChange();
+}
+
+function adminOnTeamChange() {
+  const teamId = document.getElementById('admin-user-sticker-team').value;
+  const numSel = document.getElementById('admin-user-sticker-num');
+  if (!numSel) return;
+
+  numSel.innerHTML = '';
+  const team = ALBUM_CONFIG.teams.find(t => t.id === teamId);
+  const maxStickers = teamId === 'extrastickers' ? 6 : 11;
   
+  for (let i = 1; i <= maxStickers; i++) {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = `Figurita ${i}`;
+    numSel.appendChild(opt);
+  }
+
+  adminOnStickerChange();
+}
+
+function adminOnStickerChange() {
+  if (!_adminEditingUser) return;
+  const teamId = document.getElementById('admin-user-sticker-team').value;
+  const num = document.getElementById('admin-user-sticker-num').value;
+  const statusEl = document.getElementById('admin-user-sticker-status');
+  const pasteBtn = document.getElementById('admin-user-sticker-paste-btn');
+
+  const key = `${teamId}_${num}`;
+  const inv = _adminEditingUser.data.inventory[key] || 0;
+  const pasted = !!_adminEditingUser.data.pasted[key];
+
+  statusEl.innerHTML = `Repetidas: <b>${inv}</b> | Pegada: <b style="color:${pasted ? '#28a745' : '#dc3545'};">${pasted ? 'SÍ' : 'NO'}</b>`;
+  pasteBtn.textContent = pasted ? 'Despegar Figurita' : 'Pegar Figurita';
+  pasteBtn.style.background = pasted ? 'rgba(220,53,69,0.15)' : 'rgba(255,215,0,0.15)';
+  pasteBtn.style.borderColor = pasted ? '#dc3545' : '#ffd700';
+  pasteBtn.style.color = pasted ? '#f87171' : '#ffd700';
+}
+
+function adminChangeStickerQty(delta) {
+  if (!_adminEditingUser) return;
+  const teamId = document.getElementById('admin-user-sticker-team').value;
+  const num = document.getElementById('admin-user-sticker-num').value;
+  const key = `${teamId}_${num}`;
+
+  let current = _adminEditingUser.data.inventory[key] || 0;
+  current += delta;
+  if (current < 0) current = 0;
+
+  _adminEditingUser.data.inventory[key] = current;
+  adminOnStickerChange();
+}
+
+function adminToggleStickerPasted() {
+  if (!_adminEditingUser) return;
+  const teamId = document.getElementById('admin-user-sticker-team').value;
+  const num = document.getElementById('admin-user-sticker-num').value;
+  const key = `${teamId}_${num}`;
+
+  const current = !!_adminEditingUser.data.pasted[key];
+  if (current) {
+    delete _adminEditingUser.data.pasted[key];
+  } else {
+    _adminEditingUser.data.pasted[key] = true;
+  }
+  adminOnStickerChange();
+}
+
+async function adminSaveUserChanges() {
+  if (!_adminEditingUser || !_fbDb) return;
+
+  const coins = parseInt(document.getElementById('admin-user-coins').value, 10);
+  const packs = parseInt(document.getElementById('admin-user-packs').value, 10);
+
+  _adminEditingUser.data.coins = isNaN(coins) ? 0 : coins;
+  _adminEditingUser.data.packs = isNaN(packs) ? 0 : packs;
+  _adminEditingUser.data.lastUpdated = Date.now();
+
+  showToast('Guardando cambios en Firestore...', 'success');
+
   try {
-    await _fbDb.collection('albums').doc(uid).update({ coins: coins });
-    showToast('¡Monedas actualizadas!', 'success');
-    
-    // Si el administrador se edita a sí mismo, actualizar su estado local
-    if (uid === _currentUser.uid) {
-      state.coins = coins;
-      saveState();
-    }
-    
-    adminLoadUsers();
-  } catch(e) {
-    showToast('Error al actualizar monedas.', 'error');
-    console.error(e);
+    await _fbDb.collection('albums').doc(_adminEditingUser.uid).set(_adminEditingUser.data);
+    showToast('¡Cambios guardados con éxito!', 'success');
+  } catch (e) {
+    console.error('[Admin] Error guardando cambios del usuario:', e);
+    showToast('Error al guardar en Firestore.', 'error');
   }
 }
+
 
 // ==========================================================================
 // AUTH UI – Funciones para el Modal de Login
@@ -1161,6 +1363,507 @@ function toggleMusic() {
         console.warn('[Music] play() blocked:', err);
       });
     }
+  }
+}
+
+// ==========================================================================
+// INTERCAMBIO DE FIGURITAS
+// ==========================================================================
+const MAX_TRADES_PER_DAY = 3;
+
+function renderTradePage() {
+  const loginPrompt = document.getElementById('trade-login-prompt');
+  const mainContent = document.getElementById('trade-main-content');
+  if (!loginPrompt || !mainContent) return;
+
+  if (!_currentUser) {
+    loginPrompt.classList.remove('hidden');
+    mainContent.classList.add('hidden');
+    return;
+  }
+
+  loginPrompt.classList.add('hidden');
+  mainContent.classList.remove('hidden');
+
+  _selectedOffer = [];
+  _selectedWant = [];
+  _tradeMode = 'single';
+
+  // Reset mode toggle UI
+  document.getElementById('trade-mode-single').classList.add('active');
+  document.getElementById('trade-mode-multi').classList.remove('active');
+
+  updateTradeDailyLimit();
+  populateTradeSelectors();
+  updateTradePublishBtn();
+  loadOpenTrades();
+  loadMyTrades();
+}
+
+function updateTradeDailyLimit() {
+  // Reset diario si cambió el día
+  const todayStr = new Date().toISOString().slice(0, 10);
+  if (state.tradeDate !== todayStr) {
+    state.tradesToday = 0;
+    state.tradeDate = todayStr;
+    saveState();
+  }
+  const el = document.getElementById('trade-daily-limit');
+  if (!el) return;
+  el.textContent = `${state.tradesToday}/${MAX_TRADES_PER_DAY} intercambios hoy`;
+  if (state.tradesToday >= MAX_TRADES_PER_DAY) {
+    el.style.color = '#dc3545';
+  } else if (state.tradesToday >= 2) {
+    el.style.color = '#ffa500';
+  } else {
+    el.style.color = '#28a745';
+  }
+}
+
+function setTradeMode(mode) {
+  _tradeMode = mode;
+  _selectedOffer = [];
+  _selectedWant = [];
+  document.getElementById('trade-mode-single').classList.toggle('active', mode === 'single');
+  document.getElementById('trade-mode-multi').classList.toggle('active', mode === 'multi');
+  populateTradeSelectors();
+  updateTradePublishBtn();
+}
+
+function _getStickerLabel(key) {
+  const parts = key.split('_');
+  const teamId = parts[0];
+  const num = parts[1];
+  const team = ALBUM_CONFIG.teams.find(t => t.id === teamId);
+  return team ? `${team.flag} ${team.name} #${num}` : key;
+}
+
+function _getDuplicateCount(key) {
+  const inv = state.inventory[key] || 0;
+  if (state.pasted[key]) return inv;
+  return Math.max(0, inv - 1);
+}
+
+function populateTradeSelectors() {
+  const offerContainer = document.getElementById('trade-offer-selector');
+  const wantContainer = document.getElementById('trade-want-selector');
+  if (!offerContainer || !wantContainer) return;
+
+  offerContainer.innerHTML = '';
+  wantContainer.innerHTML = '';
+
+  // --- OFREZCO: figuritas repetidas ---
+  let hasOffer = false;
+  ALBUM_CONFIG.teams.forEach(team => {
+    const max = team.id === 'extrastickers' ? 6 : 11;
+    for (let i = 1; i <= max; i++) {
+      const key = `${team.id}_${i}`;
+      const dupCount = _getDuplicateCount(key);
+      if (dupCount > 0) {
+        hasOffer = true;
+        const chip = _createTradeChip(key, team, i, dupCount, 'offer');
+        offerContainer.appendChild(chip);
+      }
+    }
+  });
+  if (!hasOffer) {
+    offerContainer.innerHTML = '<p style="color:#666; font-size:0.85rem; text-align:center; padding:20px;">No ten\u00e9s figuritas repetidas para ofrecer.</p>';
+  }
+
+  // --- PIDO: figuritas que NO tengo ---
+  let hasWant = false;
+  ALBUM_CONFIG.teams.forEach(team => {
+    const max = team.id === 'extrastickers' ? 6 : 11;
+    for (let i = 1; i <= max; i++) {
+      const key = `${team.id}_${i}`;
+      const hasPasted = !!state.pasted[key];
+      const hasInInventory = (state.inventory[key] || 0) > 0;
+      if (!hasPasted && !hasInInventory) {
+        hasWant = true;
+        const chip = _createTradeChip(key, team, i, 0, 'want');
+        wantContainer.appendChild(chip);
+      }
+    }
+  });
+  if (!hasWant) {
+    wantContainer.innerHTML = '<p style="color:#666; font-size:0.85rem; text-align:center; padding:20px;">\u00a1Ten\u00e9s todas las figuritas!</p>';
+  }
+}
+
+function _createTradeChip(key, team, num, count, side) {
+  const chip = document.createElement('div');
+  chip.className = 'trade-chip';
+  chip.dataset.key = key;
+  chip.dataset.side = side;
+
+  const basePath = `${ALBUM_CONFIG.basePath}/${team.id}/${num}`;
+  const imgSrc = getStickerImgSrc(team.id, num);
+
+  chip.innerHTML = `
+    ${count > 0 ? `<div class="trade-sticker-count">${count}</div>` : ''}
+    <img src="${imgSrc}" onerror="window.handleImageError(this, '${basePath}')" onload="window.handleImageSuccess(this, '${basePath}')" />
+    <div class="chip-label">${team.flag} #${num}</div>
+  `;
+
+  chip.onclick = () => toggleTradeChip(key, side);
+  return chip;
+}
+
+function toggleTradeChip(key, side) {
+  const arr = side === 'offer' ? _selectedOffer : _selectedWant;
+  const idx = arr.indexOf(key);
+
+  if (idx >= 0) {
+    // Deseleccionar
+    arr.splice(idx, 1);
+  } else {
+    if (_tradeMode === 'single') {
+      // En modo single, solo 1 seleccionada
+      arr.length = 0;
+      arr.push(key);
+    } else {
+      // En modo multi, limitar a 5 máximo por lado
+      if (arr.length >= 5) {
+        showToast('Máximo 5 figuritas por lado.', 'error');
+        return;
+      }
+      arr.push(key);
+    }
+  }
+
+  // Actualizar UI de chips
+  const containerId = side === 'offer' ? 'trade-offer-selector' : 'trade-want-selector';
+  document.querySelectorAll(`#${containerId} .trade-chip`).forEach(chip => {
+    const isSelected = arr.includes(chip.dataset.key);
+    chip.classList.toggle('selected', isSelected);
+  });
+
+  updateTradePublishBtn();
+}
+
+function updateTradePublishBtn() {
+  const btn = document.getElementById('trade-publish-btn');
+  if (!btn) return;
+  const canPublish = _selectedOffer.length > 0 && _selectedWant.length > 0 && state.tradesToday < MAX_TRADES_PER_DAY;
+  btn.disabled = !canPublish;
+}
+
+async function publishTrade() {
+  if (!_currentUser || !_fbDb) {
+    showToast('Necesitás iniciar sesión.', 'error');
+    return;
+  }
+  if (_selectedOffer.length === 0 || _selectedWant.length === 0) {
+    showToast('Seleccioná al menos una figurita de cada lado.', 'error');
+    return;
+  }
+  if (state.tradesToday >= MAX_TRADES_PER_DAY) {
+    showToast('Alcanzaste el límite diario de intercambios.', 'error');
+    return;
+  }
+
+  // Verificar que todavía tenemos las repetidas
+  for (const key of _selectedOffer) {
+    if (_getDuplicateCount(key) <= 0) {
+      showToast(`Ya no tenés repetidas de ${_getStickerLabel(key)}.`, 'error');
+      return;
+    }
+  }
+
+  const tradeData = {
+    creatorUid: _currentUser.uid,
+    creatorEmail: _currentUser.email,
+    creatorName: _currentUser.displayName || _currentUser.email.split('@')[0],
+    offerStickers: _selectedOffer,
+    wantStickers: _selectedWant,
+    status: 'open',
+    createdAt: Date.now()
+  };
+
+  try {
+    await _fbDb.collection('trades').add(tradeData);
+    showToast('\u00a1Oferta publicada en el mercado!', 'success');
+    _selectedOffer = [];
+    _selectedWant = [];
+    populateTradeSelectors();
+    updateTradePublishBtn();
+    loadMyTrades();
+  } catch (e) {
+    console.error('[Trade] Error al publicar:', e);
+    showToast('Error al publicar la oferta.', 'error');
+  }
+}
+
+async function loadOpenTrades() {
+  if (!_fbDb || !_currentUser) return;
+  const grid = document.getElementById('trade-market-grid');
+  const emptyEl = document.getElementById('trade-market-empty');
+  if (!grid) return;
+
+  // Limpiar listener anterior
+  if (_tradesUnsubscribe) {
+    _tradesUnsubscribe();
+    _tradesUnsubscribe = null;
+  }
+
+  try {
+    const query = _fbDb.collection('trades')
+      .where('status', '==', 'open')
+      .orderBy('createdAt', 'desc')
+      .limit(50);
+
+    _tradesUnsubscribe = query.onSnapshot(snap => {
+      grid.innerHTML = '';
+      let hasCards = false;
+
+      snap.forEach(doc => {
+        const data = doc.data();
+        // No mostrar mis propias ofertas aquí
+        if (data.creatorUid === _currentUser.uid) return;
+
+        hasCards = true;
+        const card = _createTradeOfferCard(doc.id, data, false);
+        grid.appendChild(card);
+      });
+
+      if (!hasCards) {
+        grid.innerHTML = `<div class="trade-empty-state"><div style="font-size:3rem;">\ud83c\udfdc\ufe0f</div><p>No hay ofertas de otros jugadores en este momento.</p></div>`;
+      }
+
+      // Actualizar badge
+      _updateTradeBadge(snap);
+    });
+  } catch (e) {
+    console.error('[Trade] Error cargando trades:', e);
+    grid.innerHTML = '<p style="color:#dc3545;">Error al cargar el mercado.</p>';
+  }
+}
+
+function _updateTradeBadge(snap) {
+  const badge = document.getElementById('trade-badge');
+  if (!badge) return;
+  let count = 0;
+  snap.forEach(doc => {
+    const data = doc.data();
+    if (data.creatorUid !== _currentUser.uid) {
+      // El usuario actual puede aceptar si tiene TODAS las figuritas solicitadas
+      const canAccept = data.wantStickers.every(key => _getDuplicateCount(key) > 0);
+      if (canAccept) count++;
+    }
+  });
+  if (count > 0) {
+    badge.textContent = count;
+    badge.style.display = 'inline-flex';
+  } else {
+    badge.textContent = '';
+    badge.style.display = 'none';
+  }
+}
+
+async function loadMyTrades() {
+  if (!_fbDb || !_currentUser) return;
+  const container = document.getElementById('trade-my-offers');
+  if (!container) return;
+
+  try {
+    const snap = await _fbDb.collection('trades')
+      .where('creatorUid', '==', _currentUser.uid)
+      .where('status', '==', 'open')
+      .orderBy('createdAt', 'desc')
+      .get();
+
+    container.innerHTML = '';
+    if (snap.empty) {
+      container.innerHTML = `<div class="trade-empty-state"><div style="font-size:3rem;">\ud83d\udced</div><p>No ten\u00e9s ofertas pendientes.</p></div>`;
+      return;
+    }
+
+    snap.forEach(doc => {
+      const card = _createTradeOfferCard(doc.id, doc.data(), true);
+      container.appendChild(card);
+    });
+  } catch (e) {
+    console.error('[Trade] Error cargando mis ofertas:', e);
+  }
+}
+
+function _createTradeOfferCard(tradeId, data, isMine) {
+  const card = document.createElement('div');
+  card.className = 'trade-offer-card';
+
+  // Generar thumbnails de figuritas ofrecidas
+  const offerThumbs = data.offerStickers.map(key => {
+    const parts = key.split('_');
+    const imgSrc = getStickerImgSrc(parts[0], parts[1]);
+    const label = _getStickerLabel(key);
+    return `<div class="offer-sticker-thumb" title="${label}"><img src="${imgSrc}" onerror="this.style.display='none'" /></div>`;
+  }).join('');
+
+  // Generar thumbnails de figuritas pedidas
+  const wantThumbs = data.wantStickers.map(key => {
+    const parts = key.split('_');
+    const imgSrc = getStickerImgSrc(parts[0], parts[1]);
+    const label = _getStickerLabel(key);
+    return `<div class="offer-sticker-thumb" title="${label}"><img src="${imgSrc}" onerror="this.style.display='none'" /></div>`;
+  }).join('');
+
+  // Verificar si el usuario puede aceptar (tiene las figuritas pedidas)
+  const canAccept = !isMine && data.wantStickers.every(key => _getDuplicateCount(key) > 0);
+
+  const creatorDisplay = data.creatorName || data.creatorEmail.split('@')[0];
+  const timeAgo = _timeAgo(data.createdAt);
+
+  let actionBtn = '';
+  if (isMine) {
+    actionBtn = `<button class="trade-cancel-btn" onclick="cancelTrade('${tradeId}')">\u274c Cancelar</button>`;
+  } else if (canAccept) {
+    actionBtn = `<button class="trade-accept-btn" onclick="acceptTrade('${tradeId}')">\u2705 Aceptar Intercambio</button>`;
+  } else {
+    actionBtn = `<button class="trade-accept-btn" disabled title="No ten\u00e9s las figuritas que pide">\ud83d\udeab No ten\u00e9s lo que pide</button>`;
+  }
+
+  card.innerHTML = `
+    <div class="offer-creator">
+      <span>${isMine ? '\ud83d\udccc T\u00fa' : '\ud83d\udc64 ' + creatorDisplay}</span>
+      <span class="offer-time">${timeAgo}</span>
+    </div>
+    <div class="offer-stickers">
+      <div class="offer-side offer-give">
+        <div class="offer-side-label">Ofrece</div>
+        <div class="offer-thumbs">${offerThumbs}</div>
+      </div>
+      <div class="offer-arrow">\u27a1\ufe0f</div>
+      <div class="offer-side offer-receive">
+        <div class="offer-side-label">Pide</div>
+        <div class="offer-thumbs">${wantThumbs}</div>
+      </div>
+    </div>
+    <div class="offer-actions">${actionBtn}</div>
+  `;
+
+  return card;
+}
+
+function _timeAgo(timestamp) {
+  const diff = Date.now() - timestamp;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Ahora';
+  if (mins < 60) return `Hace ${mins}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `Hace ${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `Hace ${days}d`;
+}
+
+async function acceptTrade(tradeId) {
+  if (!_currentUser || !_fbDb) {
+    showToast('Necesit\u00e1s iniciar sesi\u00f3n.', 'error');
+    return;
+  }
+  if (state.tradesToday >= MAX_TRADES_PER_DAY) {
+    showToast('Alcanzaste el l\u00edmite diario de intercambios.', 'error');
+    return;
+  }
+
+  try {
+    const tradeDoc = await _fbDb.collection('trades').doc(tradeId).get();
+    if (!tradeDoc.exists) {
+      showToast('La oferta ya no existe.', 'error');
+      return;
+    }
+    const trade = tradeDoc.data();
+    if (trade.status !== 'open') {
+      showToast('La oferta ya no est\u00e1 disponible.', 'error');
+      return;
+    }
+    if (trade.creatorUid === _currentUser.uid) {
+      showToast('No pod\u00e9s aceptar tu propia oferta.', 'error');
+      return;
+    }
+
+    // Verificar que el aceptante tiene las figuritas pedidas
+    for (const key of trade.wantStickers) {
+      if (_getDuplicateCount(key) <= 0) {
+        showToast(`No ten\u00e9s repetidas de ${_getStickerLabel(key)}.`, 'error');
+        return;
+      }
+    }
+
+    // === EJECUTAR INTERCAMBIO ===
+    // 1. Actualizar inventario del ACEPTANTE (usuario actual)
+    //    - Pierde las figuritas que el creador pidió
+    //    - Gana las figuritas que el creador ofreció
+    for (const key of trade.wantStickers) {
+      state.inventory[key] = (state.inventory[key] || 0) - 1;
+      if (state.inventory[key] <= 0) delete state.inventory[key];
+    }
+    for (const key of trade.offerStickers) {
+      state.inventory[key] = (state.inventory[key] || 0) + 1;
+    }
+
+    // 2. Incrementar contador diario
+    state.tradesToday++;
+    saveState();
+
+    // 3. Actualizar el inventario del CREADOR en Firestore
+    const creatorAlbumDoc = await _fbDb.collection('albums').doc(trade.creatorUid).get();
+    if (creatorAlbumDoc.exists) {
+      const creatorState = creatorAlbumDoc.data();
+      const creatorInv = creatorState.inventory || {};
+
+      // El creador pierde lo que ofreció
+      for (const key of trade.offerStickers) {
+        creatorInv[key] = (creatorInv[key] || 0) - 1;
+        if (creatorInv[key] <= 0) delete creatorInv[key];
+      }
+      // El creador gana lo que el aceptante le dio
+      for (const key of trade.wantStickers) {
+        creatorInv[key] = (creatorInv[key] || 0) + 1;
+      }
+
+      // Incrementar trades del creador
+      const creatorTradesToday = (creatorState.tradesToday || 0) + 1;
+
+      await _fbDb.collection('albums').doc(trade.creatorUid).update({
+        inventory: creatorInv,
+        tradesToday: creatorTradesToday
+      });
+    }
+
+    // 4. Marcar trade como completado
+    await _fbDb.collection('trades').doc(tradeId).update({
+      status: 'completed',
+      acceptedBy: _currentUser.uid,
+      acceptedByEmail: _currentUser.email,
+      completedAt: Date.now()
+    });
+
+    showToast('\u00a1Intercambio realizado con \u00e9xito! \ud83c\udf89', 'success');
+    updateTradeDailyLimit();
+    populateTradeSelectors();
+    updateTopBar();
+    loadMyTrades();
+
+  } catch (e) {
+    console.error('[Trade] Error al aceptar intercambio:', e);
+    showToast('Error al procesar el intercambio.', 'error');
+  }
+}
+
+async function cancelTrade(tradeId) {
+  if (!_currentUser || !_fbDb) return;
+  if (!confirm('\u00bfCancel\u00e1s esta oferta de intercambio?')) return;
+
+  try {
+    await _fbDb.collection('trades').doc(tradeId).update({
+      status: 'cancelled',
+      cancelledAt: Date.now()
+    });
+    showToast('Oferta cancelada.', 'success');
+    loadMyTrades();
+  } catch (e) {
+    console.error('[Trade] Error al cancelar:', e);
+    showToast('Error al cancelar la oferta.', 'error');
   }
 }
 
