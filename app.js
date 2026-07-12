@@ -934,8 +934,12 @@ function _isAdmin() {
 function setAdminAmount(amount) {
   document.getElementById('admin-amount-input').value = amount;
   // Highlight del botón seleccionado
-  document.querySelectorAll('.admin-amount-btn').forEach(b => b.classList.remove('selected'));
-  event.currentTarget.classList.add('selected');
+  document.querySelectorAll('.admin-amount-btn').forEach(b => {
+    b.classList.remove('selected');
+    if (parseInt(b.textContent) === amount) {
+      b.classList.add('selected');
+    }
+  });
 }
 
 function _randomCode(length = 8) {
