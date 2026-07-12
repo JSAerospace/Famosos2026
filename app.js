@@ -785,6 +785,7 @@ async function redeemCode() {
   const hardcoded = {
     'INFINITOPLATA': { coins: 999999, label: '🤑 ¡CHEAT ACTIVADO! +999,999 🪙' },
     'MUNDIAL2026':   { coins: 1000,   label: '+1000 🪙' },
+    'POUSADEIDAD':   { coins: 500,    label: '+500 🪙' },
     'LEGEND':        { coins: 150,    label: '+150 🪙' },
   };
 
