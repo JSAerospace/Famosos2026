@@ -217,6 +217,17 @@
             <p style="color:#555; font-size:0.85rem;">Cargando...</p>
           </div>
         </div>
+        
+        <!-- LISTA DE USUARIOS -->
+        <div style="margin-top:30px; width:100%;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <h3 style="color:#ffd700; font-family:'Orbitron',sans-serif; font-size:0.9rem;">Gestión de Usuarios</h3>
+            <button onclick="adminLoadUsers()" style="background:none; border:1px solid #555; color:#aaa; padding:5px 12px; border-radius:6px; cursor:pointer; font-size:0.8rem;">🔄 Actualizar</button>
+          </div>
+          <div id="admin-users-list" style="max-height:300px; overflow-y:auto; display:flex; flex-direction:column; gap:8px;">
+            <p style="color:#555; font-size:0.85rem;">Cargando usuarios...</p>
+          </div>
+        </div>
       </div>
     </div>
   </section>
