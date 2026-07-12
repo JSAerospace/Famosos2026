@@ -682,6 +682,7 @@ function renderDuplicates() {
 
 function sellAllDuplicates() {
   let sold = 0;
+  let earnedCoins = 0;
   for(const key in state.inventory) {
     const pasted = !!state.pasted[key];
     const inv = state.inventory[key] || 0;
@@ -691,13 +692,19 @@ function sellAllDuplicates() {
     if(repetidas > 0) {
       sold += repetidas;
       state.inventory[key] -= repetidas;
+      
+      if (key.startsWith('extrastickers_')) {
+        earnedCoins += (repetidas * 100);
+      } else {
+        earnedCoins += (repetidas * 15);
+      }
     }
   }
   
   if (sold > 0) {
-    state.coins += (sold * 15);
+    state.coins += earnedCoins;
     saveState();
-    showToast(`Vendiste ${sold} repetidas.`);
+    showToast(`Vendiste ${sold} repetidas por ${earnedCoins}🪙.`);
     renderDuplicates();
   } else {
     showToast("No tenés repetidas.", "error");
