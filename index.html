@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,400;0,700;1,900&family=Orbitron:wght@700;900&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=1.0.6" />
+  <link rel="stylesheet" href="styles.css?v=1.0.7" />
 </head>
 <body>
 
@@ -117,6 +117,13 @@
             <div class="store-btn-text">
               <span class="store-btn-title">Comprar Sobre</span>
               <span class="store-btn-sub">100 Monedas</span>
+            </div>
+          </button>
+          <button class="store-btn hidden" id="open-stacked-btn" onclick="triggerPackOpening()" style="background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%);">
+            <div class="store-btn-icon">⚡</div>
+            <div class="store-btn-text">
+              <span class="store-btn-title">Abrir Sobre Guardado</span>
+              <span class="store-btn-sub" id="stacked-count-sub">0 disponibles</span>
             </div>
           </button>
         </div>
@@ -308,9 +315,9 @@
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
-<script src="firebase-config.js?v=1.0.6"></script>
-<script src="config.js?v=1.0.6"></script>
-<script src="app.js?v=1.0.6"></script>
+<script src="firebase-config.js?v=1.0.7"></script>
+<script src="config.js?v=1.0.7"></script>
+<script src="app.js?v=1.0.7"></script>
 <audio id="bg-music" src="mi-album/Landing_Burn.mp3" loop preload="auto"></audio>
 </body>
 </html>

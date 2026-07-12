@@ -131,6 +131,7 @@ let state = {
   pasted: {},      // "equipoId_numero": true
   inventory: {},   // "equipoId_numero": cantidad
   openedPacksCount: 0,
+  unopenedPacks: 0,
   dailyCooldown: null,
   usedCodes: {}    // "codigo": true
 };
@@ -267,6 +268,7 @@ function loadState() {
   }
   // Asegurar que exista el objeto de códigos usados
   state.usedCodes = state.usedCodes || {};
+  state.unopenedPacks = state.unopenedPacks || 0;
 }
 
 function saveState() {
@@ -327,6 +329,23 @@ function updateTopBar() {
   const badge = document.getElementById('dup-badge');
   badge.textContent = dupCount;
   badge.style.display = dupCount > 0 ? 'inline-block' : 'none';
+  
+  updateUnopenedPacksUI();
+}
+
+function updateUnopenedPacksUI() {
+  const count = state.unopenedPacks || 0;
+  const btn = document.getElementById('open-stacked-btn');
+  const sub = document.getElementById('stacked-count-sub');
+  
+  if (btn && sub) {
+    if (count > 0) {
+      btn.classList.remove('hidden');
+      sub.textContent = `${count} disponibles`;
+    } else {
+      btn.classList.add('hidden');
+    }
+  }
 }
 
 function countTotalDuplicates() {
@@ -551,11 +570,10 @@ function claimFreePack() {
   
   // Establecer el tiempo de espera en 2 horas desde ahora
   state.dailyCooldown = now + (2 * 60 * 60 * 1000);
+  state.unopenedPacks = (state.unopenedPacks || 0) + 1;
   saveState();
   
-  // En lugar de dar dinero, damos un sobre directo
-  triggerPackOpening();
-  showToast("¡Sobre gratis reclamado!");
+  showToast("¡Obtuviste 1 sobre! Abrilo ahora.");
   updateTimer(); // Forzar actualización visual inmediata
 }
 
@@ -566,12 +584,19 @@ function openPack() {
   }
   
   state.coins -= 100;
+  state.unopenedPacks = (state.unopenedPacks || 0) + 1;
   saveState();
   
-  triggerPackOpening();
+  showToast("¡Compraste 1 sobre! Abrilo abajo.");
 }
 
 function triggerPackOpening() {
+  if ((state.unopenedPacks || 0) <= 0) {
+    showToast("No tenés sobres para abrir.", "error");
+    return;
+  }
+  
+  state.unopenedPacks--;
   state.openedPacksCount++;
   saveState();
   
