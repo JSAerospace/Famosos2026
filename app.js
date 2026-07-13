@@ -1731,35 +1731,46 @@ async function loadOpenTrades() {
   }
 
   try {
+    // Para evitar requerir un índice compuesto en Firestore, quitamos orderBy de la consulta de Firestore
+    // y realizamos la ordenación en memoria (JavaScript)
     const query = _fbDb.collection('trades')
       .where('status', '==', 'open')
-      .orderBy('createdAt', 'desc')
-      .limit(50);
+      .limit(100);
 
     _tradesUnsubscribe = query.onSnapshot(snap => {
       grid.innerHTML = '';
       let hasCards = false;
 
+      // Ordenar en memoria por createdAt desc
+      const tradesArray = [];
       snap.forEach(doc => {
-        const data = doc.data();
+        tradesArray.push({ id: doc.id, data: doc.data() });
+      });
+      tradesArray.sort((a, b) => (b.data.createdAt || 0) - (a.data.createdAt || 0));
+
+      tradesArray.forEach(item => {
+        const data = item.data;
         // No mostrar mis propias ofertas aquí
         if (data.creatorUid === _currentUser.uid) return;
 
         hasCards = true;
-        const card = _createTradeOfferCard(doc.id, data, false);
+        const card = _createTradeOfferCard(item.id, data, false);
         grid.appendChild(card);
       });
 
       if (!hasCards) {
-        grid.innerHTML = `<div class="trade-empty-state"><div style="font-size:3rem;">\ud83c\udfdc\ufe0f</div><p>No hay ofertas de otros jugadores en este momento.</p></div>`;
+        grid.innerHTML = `<div class="trade-empty-state"><div style="font-size:3rem;">🏝️</div><p>No hay ofertas de otros jugadores en este momento.</p></div>`;
       }
 
       // Actualizar badge
       _updateTradeBadge(snap);
+    }, err => {
+      console.error('[Trade] Error en onSnapshot de trades:', err);
+      grid.innerHTML = '<p style="color:#dc3545; text-align:center;">Error al conectar con el servidor de intercambios.</p>';
     });
   } catch (e) {
     console.error('[Trade] Error cargando trades:', e);
-    grid.innerHTML = '<p style="color:#dc3545;">Error al cargar el mercado.</p>';
+    grid.innerHTML = '<p style="color:#dc3545; text-align:center;">Error al cargar el mercado.</p>';
   }
 }
 
@@ -1790,24 +1801,32 @@ async function loadMyTrades() {
   if (!container) return;
 
   try {
+    // Quitamos el orderBy para no requerir índice compuesto en Firestore
     const snap = await _fbDb.collection('trades')
       .where('creatorUid', '==', _currentUser.uid)
       .where('status', '==', 'open')
-      .orderBy('createdAt', 'desc')
       .get();
 
     container.innerHTML = '';
     if (snap.empty) {
-      container.innerHTML = `<div class="trade-empty-state"><div style="font-size:3rem;">\ud83d\udced</div><p>No ten\u00e9s ofertas pendientes.</p></div>`;
+      container.innerHTML = `<div class="trade-empty-state"><div style="font-size:3rem;">📬</div><p>No tenés ofertas pendientes.</p></div>`;
       return;
     }
 
+    // Ordenar en memoria
+    const myTrades = [];
     snap.forEach(doc => {
-      const card = _createTradeOfferCard(doc.id, doc.data(), true);
+      myTrades.push({ id: doc.id, data: doc.data() });
+    });
+    myTrades.sort((a, b) => (b.data.createdAt || 0) - (a.data.createdAt || 0));
+
+    myTrades.forEach(item => {
+      const card = _createTradeOfferCard(item.id, item.data, true);
       container.appendChild(card);
     });
   } catch (e) {
     console.error('[Trade] Error cargando mis ofertas:', e);
+    container.innerHTML = '<p style="color:#dc3545; text-align:center;">Error al cargar tus ofertas.</p>';
   }
 }
 
