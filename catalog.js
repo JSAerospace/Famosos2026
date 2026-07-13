@@ -12,10 +12,10 @@
 const ALBUM_CONFIG = {
   // Monedas iniciales que recibe el usuario
   initialCoins: 500,
-  
+
   // Costo en monedas de cada sobre
   packCost: 100,
-  
+
   // Lista de selecciones del Álbum
   countries: [
     {

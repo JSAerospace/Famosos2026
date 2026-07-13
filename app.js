@@ -43,17 +43,17 @@ function initFirebase() {
 async function handleAuthStateChanged(user) {
   _currentUser = user;
   renderUserTopbar();
-  // Mostrar tab de admin e intercambio solo para el administrador
+  // Mostrar tab de admin e intercambio
   const adminBtn = document.getElementById('admin-tab-btn');
   const tradeBtn = document.getElementById('trade-tab-btn');
   
   if (_isAdmin()) {
     if (adminBtn) adminBtn.classList.remove('hidden');
-    if (tradeBtn) tradeBtn.classList.remove('hidden');
   } else {
     if (adminBtn) adminBtn.classList.add('hidden');
-    if (tradeBtn) tradeBtn.classList.add('hidden');
   }
+  if (tradeBtn) tradeBtn.classList.remove('hidden');
+  
   if (user) {
     // Cargamos el progreso desde la nube al iniciar sesión
     await loadStateFromCloud(user.uid);
@@ -134,7 +134,8 @@ let state = {
   dailyCooldown: null,
   usedCodes: {},    // "codigo": true
   tradesToday: 0,   // intercambios realizados hoy
-  tradeDate: null   // fecha del último reset de tradesToday
+  tradeDate: null,  // fecha del último reset de tradesToday
+  pendingTradeItems: {} // "key": cantidad reservada en trades activos
 };
 
 let currentTeamIndex = 0;
@@ -142,6 +143,9 @@ let _tradeMode = 'single'; // 'single' | 'multi'
 let _selectedOffer = [];   // keys de figuritas ofrecidas
 let _selectedWant = [];    // keys de figuritas pedidas
 let _tradesUnsubscribe = null; // para limpiar listener de Firestore
+
+// Keys de figuritas reservadas en trades activos propios (no vendibles)
+let _reservedInTrades = new Set();
 
 // Manejador global para probar múltiples extensiones si la primera falla (.png -> .jpg -> .jpeg etc)
 window.handleImageError = function(img, basePath) {
@@ -286,12 +290,15 @@ function loadState() {
   state.tradesToday = state.tradesToday || 0;
   state.tradeDate = state.tradeDate || null;
   state.packs = state.packs !== undefined ? state.packs : 0;
+  state.pendingTradeItems = state.pendingTradeItems || {};
   // Reset diario de trades
   const todayStr = new Date().toISOString().slice(0, 10);
   if (state.tradeDate !== todayStr) {
     state.tradesToday = 0;
     state.tradeDate = todayStr;
   }
+  // Reconstruir set de reservas
+  _reservedInTrades = new Set(Object.keys(state.pendingTradeItems || {}));
 }
 
 function saveState() {
@@ -329,7 +336,7 @@ function switchTab(tabId) {
   
   if (tabId === 'album') renderAlbumPage();
   if (tabId === 'duplicates') renderDuplicates();
-  if (tabId === 'trade' && _isAdmin()) renderTradePage();
+  if (tabId === 'trade') renderTradePage();
   if (tabId === 'admin') {
     adminLoadCodes();
     adminLoadUsers();
@@ -805,16 +812,20 @@ function renderDuplicates() {
       const inv = state.inventory[key] || 0;
       
       let repetidas = pasted ? inv : Math.max(0, inv - 1);
+      const reserved = state.pendingTradeItems[key] || 0;
       
       if(repetidas > 0) {
         hasDups = true;
         const basePath = `${ALBUM_CONFIG.basePath}/${team.id}/${i}`;
         const imgSrc = getStickerImgSrc(team.id, i);
         
+        const reservedHtml = reserved > 0 ? `<div style="position:absolute; bottom:-10px; right:-10px; background:#ff9500; color:white; padding: 2px 6px; border-radius:10px; display:flex; justify-content:center; align-items:center; z-index:5; font-weight:bold; font-size:0.75rem;" title="Reservada en intercambio">🤝 ${reserved}</div>` : '';
+        
         const item = document.createElement('div');
         item.style.position = 'relative';
         item.innerHTML = `
           <div style="position:absolute; top:-10px; right:-10px; background:#e2001a; color:white; width:25px; height:25px; border-radius:50%; display:flex; justify-content:center; align-items:center; z-index:5; font-weight:bold;">${repetidas}</div>
+          ${reservedHtml}
           <div class="sticker-card"><img src="${imgSrc}" class="sticker-img" onerror="window.handleImageError(this, '${basePath}')" onload="window.handleImageSuccess(this, '${basePath}')"/></div>
         `;
         grid.appendChild(item);
@@ -832,8 +843,11 @@ function sellAllDuplicates() {
   for(const key in state.inventory) {
     const pasted = !!state.pasted[key];
     const inv = state.inventory[key] || 0;
+    const reserved = state.pendingTradeItems[key] || 0;
     
     let repetidas = pasted ? inv : Math.max(0, inv - 1);
+    // No vender las que están reservadas en trades activos
+    repetidas = Math.max(0, repetidas - reserved);
     
     if(repetidas > 0) {
       sold += repetidas;
@@ -1515,6 +1529,9 @@ function setTradeMode(mode) {
   updateTradePublishBtn();
 }
 
+// Alias para compatibilidad con el HTML
+function switchTradeMode(mode) { setTradeMode(mode); }
+
 function _getStickerLabel(key) {
   const parts = key.split('_');
   const teamId = parts[0];
@@ -1529,6 +1546,13 @@ function _getDuplicateCount(key) {
   return Math.max(0, inv - 1);
 }
 
+// Duplicados disponibles DESCONTANDO los reservados en trades activos
+function _getAvailableDuplicateCount(key) {
+  const dups = _getDuplicateCount(key);
+  const reserved = state.pendingTradeItems[key] || 0;
+  return Math.max(0, dups - reserved);
+}
+
 function populateTradeSelectors() {
   const offerContainer = document.getElementById('trade-offer-selector');
   const wantContainer = document.getElementById('trade-want-selector');
@@ -1537,16 +1561,16 @@ function populateTradeSelectors() {
   offerContainer.innerHTML = '';
   wantContainer.innerHTML = '';
 
-  // --- OFREZCO: figuritas repetidas ---
+  // --- OFREZCO: figuritas repetidas (solo las disponibles, no reservadas) ---
   let hasOffer = false;
   ALBUM_CONFIG.teams.forEach(team => {
     const max = team.id === 'extrastickers' ? 6 : 11;
     for (let i = 1; i <= max; i++) {
       const key = `${team.id}_${i}`;
-      const dupCount = _getDuplicateCount(key);
-      if (dupCount > 0) {
+      const availCount = _getAvailableDuplicateCount(key);
+      if (availCount > 0) {
         hasOffer = true;
-        const chip = _createTradeChip(key, team, i, dupCount, 'offer');
+        const chip = _createTradeChip(key, team, i, availCount, 'offer');
         offerContainer.appendChild(chip);
       }
     }
@@ -1647,10 +1671,10 @@ async function publishTrade() {
     return;
   }
 
-  // Verificar que todavía tenemos las repetidas
+  // Verificar que todavía tenemos las repetidas DISPONIBLES (no reservadas)
   for (const key of _selectedOffer) {
-    if (_getDuplicateCount(key) <= 0) {
-      showToast(`Ya no tenés repetidas de ${_getStickerLabel(key)}.`, 'error');
+    if (_getAvailableDuplicateCount(key) <= 0) {
+      showToast(`Ya no tenés repetidas disponibles de ${_getStickerLabel(key)}.`, 'error');
       return;
     }
   }
@@ -1666,8 +1690,17 @@ async function publishTrade() {
   };
 
   try {
-    await _fbDb.collection('trades').add(tradeData);
-    showToast('\u00a1Oferta publicada en el mercado!', 'success');
+    const docRef = await _fbDb.collection('trades').add(tradeData);
+
+    // === RESERVAR las figuritas ofrecidas en el inventario local ===
+    state.pendingTradeItems = state.pendingTradeItems || {};
+    for (const key of _selectedOffer) {
+      state.pendingTradeItems[key] = (state.pendingTradeItems[key] || 0) + 1;
+      _reservedInTrades.add(key);
+    }
+    saveState();
+
+    showToast('¡Oferta publicada en el mercado! Las figuritas quedan reservadas.', 'success');
     _selectedOffer = [];
     _selectedWant = [];
     populateTradeSelectors();
@@ -1888,6 +1921,9 @@ async function acceptTrade(tradeId) {
 
     // 2. Incrementar contador diario
     state.tradesToday++;
+
+    // 3. Limpiar reservas del CREADOR que ya se concretaron (se aplica del lado del creador via Firestore)
+    //    El aceptante no tiene reservas en este trade, solo actualizar estado
     saveState();
 
     // 3. Actualizar el inventario del CREADOR en Firestore
@@ -1897,9 +1933,17 @@ async function acceptTrade(tradeId) {
       const creatorInv = creatorState.inventory || {};
 
       // El creador pierde lo que ofreció
+      const creatorPendingTradeItems = creatorState.pendingTradeItems || {};
       for (const key of trade.offerStickers) {
         creatorInv[key] = (creatorInv[key] || 0) - 1;
         if (creatorInv[key] <= 0) delete creatorInv[key];
+
+        if (creatorPendingTradeItems[key]) {
+          creatorPendingTradeItems[key]--;
+          if (creatorPendingTradeItems[key] <= 0) {
+            delete creatorPendingTradeItems[key];
+          }
+        }
       }
       // El creador gana lo que el aceptante le dio
       for (const key of trade.wantStickers) {
@@ -1911,7 +1955,8 @@ async function acceptTrade(tradeId) {
 
       await _fbDb.collection('albums').doc(trade.creatorUid).update({
         inventory: creatorInv,
-        tradesToday: creatorTradesToday
+        tradesToday: creatorTradesToday,
+        pendingTradeItems: creatorPendingTradeItems
       });
     }
 
@@ -1937,14 +1982,34 @@ async function acceptTrade(tradeId) {
 
 async function cancelTrade(tradeId) {
   if (!_currentUser || !_fbDb) return;
-  if (!confirm('\u00bfCancel\u00e1s esta oferta de intercambio?')) return;
+  if (!confirm('¿Cancelás esta oferta de intercambio?')) return;
 
   try {
+    // Obtener los datos del trade antes de cancelarlo para liberar la reserva
+    const tradeDoc = await _fbDb.collection('trades').doc(tradeId).get();
+    if (tradeDoc.exists && tradeDoc.data().creatorUid === _currentUser.uid) {
+      const trade = tradeDoc.data();
+
+      // === LIBERAR reserva de figuritas ofrecidas ===
+      state.pendingTradeItems = state.pendingTradeItems || {};
+      for (const key of trade.offerStickers) {
+        if (state.pendingTradeItems[key]) {
+          state.pendingTradeItems[key]--;
+          if (state.pendingTradeItems[key] <= 0) {
+            delete state.pendingTradeItems[key];
+            _reservedInTrades.delete(key);
+          }
+        }
+      }
+      saveState();
+    }
+
     await _fbDb.collection('trades').doc(tradeId).update({
       status: 'cancelled',
       cancelledAt: Date.now()
     });
-    showToast('Oferta cancelada.', 'success');
+    showToast('Oferta cancelada. Figuritas liberadas.', 'success');
+    populateTradeSelectors();
     loadMyTrades();
   } catch (e) {
     console.error('[Trade] Error al cancelar:', e);

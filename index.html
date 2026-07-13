@@ -22,7 +22,7 @@
         <!-- TABS DE NAVEGACIÓN -->
         <nav class="nav-tabs">
             <button class="nav-tab active" data-tab="album" onclick="switchTab('album')">📖 Álbum</button>
-            <button class="nav-tab hidden" id="trade-tab-btn" data-tab="trade" onclick="switchTab('trade')">🤝 Intercambio <span class="trade-badge" id="trade-badge" style="display:none;"></span></button>
+            <button class="nav-tab" id="trade-tab-btn" data-tab="trade" onclick="switchTab('trade')">🤝 Intercambio <span class="trade-badge" id="trade-badge" style="display:none;"></span></button>
             <button class="nav-tab" data-tab="packs" onclick="switchTab('packs')">📦 Sobres</button>
             <button class="nav-tab" data-tab="duplicates" onclick="switchTab('duplicates')">🔄 Repetidas <span class="dup-badge" id="dup-badge"></span></button>
             <button class="nav-tab" data-tab="codes" onclick="switchTab('codes')">🎟️ Códigos</button>
@@ -187,7 +187,7 @@
     <div class="trade-layout">
       <div id="trade-login-prompt" class="trade-login-prompt hidden">
         <p>Iniciá sesión para poder intercambiar figuritas con otros jugadores.</p>
-        <button class="auth-btn" onclick="openLoginModal()">Iniciar Sesión</button>
+        <button class="auth-btn" onclick="toggleAuthModal(true)">Iniciar Sesión</button>
       </div>
       
       <div id="trade-main-content" class="trade-main-content">
