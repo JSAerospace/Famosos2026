@@ -1842,12 +1842,17 @@ async function loadOpenTrades() {
       });
       tradesArray.sort((a, b) => (b.data.createdAt || 0) - (a.data.createdAt || 0));
 
-      // Separar en dos grupos
+      // Separar en dos grupos:
+      // "Te sirven": el otro ofrece algo que a vos te FALTA (no pegada y no en inventario)
       const useful = tradesArray.filter(item =>
-        item.data.wantStickers.every(key => _getDuplicateCount(key) > 0)
+        item.data.offerStickers.some(key =>
+          !state.pasted[key] && (state.inventory[key] || 0) === 0
+        )
       );
       const notUseful = tradesArray.filter(item =>
-        !item.data.wantStickers.every(key => _getDuplicateCount(key) > 0)
+        !item.data.offerStickers.some(key =>
+          !state.pasted[key] && (state.inventory[key] || 0) === 0
+        )
       );
 
       if (tradesArray.length === 0) {
