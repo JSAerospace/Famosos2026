@@ -1132,25 +1132,24 @@ async function adminSearchUser() {
   resultBox.classList.add('hidden');
 
   if (!_fbDb) {
-    showToast('Firebase no está activo localmente. No se puede buscar en la nube.', 'error');
+    showToast('Firebase no está activo. No se puede buscar en la nube.', 'error');
     return;
   }
 
   showToast('Buscando usuario...', 'success');
 
   try {
-    let docSnap = null;
     let uid = null;
     let data = null;
 
-    // 1. Intentar buscar por campo 'email'
+    // 1. Buscar por campo 'email'
     const querySnap = await _fbDb.collection('albums').where('email', '==', searchInput).get();
     if (!querySnap.empty) {
       const doc = querySnap.docs[0];
       uid = doc.id;
       data = doc.data();
     } else {
-      // 2. Si no encuentra por email, buscar por UID del documento directo
+      // 2. Si no, buscar por UID directo
       const directDoc = await _fbDb.collection('albums').doc(searchInput).get();
       if (directDoc.exists) {
         uid = directDoc.id;
@@ -1220,9 +1219,8 @@ function adminOnTeamChange() {
   if (!numSel) return;
 
   numSel.innerHTML = '';
-  const team = ALBUM_CONFIG.teams.find(t => t.id === teamId);
   const maxStickers = teamId === 'extrastickers' ? 6 : 11;
-  
+
   for (let i = 1; i <= maxStickers; i++) {
     const opt = document.createElement('option');
     opt.value = i;
@@ -1260,7 +1258,6 @@ function adminChangeStickerQty(delta) {
   let current = _adminEditingUser.data.inventory[key] || 0;
   current += delta;
   if (current < 0) current = 0;
-
   _adminEditingUser.data.inventory[key] = current;
   adminOnStickerChange();
 }
@@ -1295,12 +1292,18 @@ async function adminSaveUserChanges() {
   try {
     await _fbDb.collection('albums').doc(_adminEditingUser.uid).set(_adminEditingUser.data);
     showToast('¡Cambios guardados con éxito!', 'success');
+
+    // Si el admin editó su propio perfil, actualizar el estado local también
+    if (_currentUser && _adminEditingUser.uid === _currentUser.uid) {
+      state.coins = _adminEditingUser.data.coins;
+      state.packs = _adminEditingUser.data.packs;
+      saveState();
+    }
   } catch (e) {
     console.error('[Admin] Error guardando cambios del usuario:', e);
     showToast('Error al guardar en Firestore.', 'error');
   }
 }
-
 
 // ==========================================================================
 // AUTH UI – Funciones para el Modal de Login
