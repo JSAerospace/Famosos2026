@@ -213,7 +213,13 @@
             
             <!-- BUSCAS -->
             <div class="trade-column">
-              <h3 class="trade-column-title want">Lo que buscás (Te faltan)</h3>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); padding-bottom: 8px;">
+                <h3 class="trade-column-title want" style="margin: 0; border: none; padding: 0;">Lo que buscás</h3>
+                <select id="trade-want-filter" onchange="populateTradeSelectors()" style="padding: 4px 8px; border-radius: 6px; background: rgba(0,0,0,0.5); color: white; border: 1.5px solid rgba(255, 255, 255, 0.15); font-size: 0.75rem; font-family: inherit; font-weight: bold; cursor: pointer; transition: 0.2s; outline: none;">
+                  <option value="missing">Te faltan</option>
+                  <option value="all">Cualquiera</option>
+                </select>
+              </div>
               <div id="trade-want-selector" class="trade-sticker-selector"></div>
             </div>
           </div>

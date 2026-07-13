@@ -1579,7 +1579,10 @@ function populateTradeSelectors() {
     offerContainer.innerHTML = '<p style="color:#666; font-size:0.85rem; text-align:center; padding:20px;">No ten\u00e9s figuritas repetidas para ofrecer.</p>';
   }
 
-  // --- PIDO: figuritas que NO tengo ---
+  // --- PIDO: figuritas (según el filtro: te faltan o cualquiera) ---
+  const filterEl = document.getElementById('trade-want-filter');
+  const wantFilter = filterEl ? filterEl.value : 'missing'; // 'missing' | 'all'
+
   let hasWant = false;
   ALBUM_CONFIG.teams.forEach(team => {
     const max = team.id === 'extrastickers' ? 6 : 11;
@@ -1587,7 +1590,10 @@ function populateTradeSelectors() {
       const key = `${team.id}_${i}`;
       const hasPasted = !!state.pasted[key];
       const hasInInventory = (state.inventory[key] || 0) > 0;
-      if (!hasPasted && !hasInInventory) {
+      
+      const shouldShow = (wantFilter === 'all') || (!hasPasted && !hasInInventory);
+      
+      if (shouldShow) {
         hasWant = true;
         const chip = _createTradeChip(key, team, i, 0, 'want');
         wantContainer.appendChild(chip);
@@ -1595,7 +1601,7 @@ function populateTradeSelectors() {
     }
   });
   if (!hasWant) {
-    wantContainer.innerHTML = '<p style="color:#666; font-size:0.85rem; text-align:center; padding:20px;">\u00a1Ten\u00e9s todas las figuritas!</p>';
+    wantContainer.innerHTML = `<p style="color:#666; font-size:0.85rem; text-align:center; padding:20px;">${wantFilter === 'missing' ? '\u00a1Ten\u00e9s todas las figuritas!' : 'No hay figuritas disponibles.'}</p>`;
   }
 }
 
