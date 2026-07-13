@@ -82,6 +82,16 @@ const ALBUM_CONFIG = {
             flags: ['ENG', 'USA', 'IRN', 'WAL']
         },
         {
+            id: 'francia',
+            name: 'Francia',
+            flag: '🇫🇷',
+            federation: 'Fédération Française de Football',
+            group: 'GROUP D',
+            color1: '#00209F',
+            color2: '#E2001A',
+            flags: ['FRA', 'AUS', 'DEN', 'TUN']
+        },
+        {
             id: 'extrastickers',
             name: 'Extra Stickers',
             flag: '⭐',
