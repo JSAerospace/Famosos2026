@@ -55,10 +55,14 @@ async function handleAuthStateChanged(user) {
   if (tradeBtn) tradeBtn.classList.remove('hidden');
   
   if (user) {
-    // Cargamos el progreso desde la nube al iniciar sesión
+    // La nube tiene prioridad: cargar y luego refrescar toda la UI
     await loadStateFromCloud(user.uid);
     renderAlbumPage();
+    renderTeamIndicators();
     updateTopBar();
+    renderPacksInventory();
+    updatePackStage();
+    updateTimer();
   }
 }
 
@@ -89,21 +93,24 @@ function renderUserTopbar() {
   }
 }
 
-// Guardar en Firestore con debounce de 1.5s para no saturar
+// Guardar en Firestore con debounce de 2s para no saturar
 function saveToCloud(uid) {
   if (!_fbDb || !uid) return;
   clearTimeout(_saveDebounceTimer);
-  _saveDebounceTimer = setTimeout(() => {
+  _saveDebounceTimer = setTimeout(async () => {
     const payload = {
       ...state,
       email: _currentUser ? _currentUser.email : null,
       displayName: _currentUser ? _currentUser.displayName : null,
       lastUpdated: Date.now()
     };
-    _fbDb.collection('albums').doc(uid).set(payload)
-      .then(() => console.log('[Album] Progreso sincronizado en la nube.'))
-      .catch(e => console.error('[Album] Error al guardar en Firestore:', e));
-  }, 1500);
+    try {
+      await _fbDb.collection('albums').doc(uid).set(payload);
+      console.log('[Album] Progreso sincronizado en la nube.');
+    } catch(e) {
+      console.error('[Album] Error al guardar en Firestore:', e);
+    }
+  }, 2000);
 }
 
 async function loadStateFromCloud(uid) {
@@ -111,12 +118,51 @@ async function loadStateFromCloud(uid) {
   try {
     const doc = await _fbDb.collection('albums').doc(uid).get();
     if (doc.exists) {
-      state = { ...state, ...doc.data() };
+      const cloudData = doc.data();
+      // La nube tiene prioridad total sobre el localStorage
+      state = {
+        coins: 500,
+        pasted: {},
+        inventory: {},
+        openedPacksCount: 0,
+        dailyCooldown: null,
+        usedCodes: {},
+        tradesToday: 0,
+        tradeDate: null,
+        packs: 0,
+        pendingTradeItems: {},
+        ...cloudData
+      };
+      // Garantizar tipos correctos
+      state.pasted = state.pasted || {};
+      state.inventory = state.inventory || {};
+      state.usedCodes = state.usedCodes || {};
+      state.pendingTradeItems = state.pendingTradeItems || {};
+      state.packs = state.packs !== undefined ? state.packs : 0;
+      state.coins = state.coins !== undefined ? state.coins : 500;
+      // Reset diario de trades
+      const todayStr = new Date().toISOString().slice(0, 10);
+      if (state.tradeDate !== todayStr) {
+        state.tradesToday = 0;
+        state.tradeDate = todayStr;
+      }
+      // Auto-corregir cooldowns viejos
+      if (state.dailyCooldown && (state.dailyCooldown - Date.now() > 2 * 60 * 60 * 1000)) {
+        state.dailyCooldown = null;
+      }
+      // Reconstruir set de reservas
+      _reservedInTrades = new Set(Object.keys(state.pendingTradeItems));
+      // Persistir también en localStorage para uso offline
+      localStorage.setItem('panini_static_state', JSON.stringify(state));
       console.log('[Album] Progreso cargado desde la nube.');
     } else {
-      console.log('[Album] Usuario nuevo: empezando desde cero.');
-      // Guardar estado inicial en la nube
-      await _fbDb.collection('albums').doc(uid).set(state);
+      console.log('[Album] Usuario nuevo: guardando estado inicial en la nube.');
+      await _fbDb.collection('albums').doc(uid).set({
+        ...state,
+        email: _currentUser ? _currentUser.email : null,
+        displayName: _currentUser ? _currentUser.displayName : null,
+        lastUpdated: Date.now()
+      });
     }
   } catch(e) {
     console.error('[Album] Error al cargar desde Firestore:', e);
