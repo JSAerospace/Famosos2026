@@ -798,70 +798,138 @@ function revealCards() {
 // ==========================================================================
 // REPETIDAS
 // ==========================================================================
+let _selectedDuplicates = new Set(); // keys seleccionadas para vender
+
 function renderDuplicates() {
   const grid = document.getElementById('dup-grid');
   grid.innerHTML = '';
-  
+  _selectedDuplicates.clear();
+  _updateSellSelectedBtn();
+
   let hasDups = false;
-  
+
   ALBUM_CONFIG.teams.forEach(team => {
     const maxStickers = team.id === 'extrastickers' ? 6 : 11;
-    for(let i=1; i<=maxStickers; i++){
+    for (let i = 1; i <= maxStickers; i++) {
       const key = `${team.id}_${i}`;
       const pasted = !!state.pasted[key];
       const inv = state.inventory[key] || 0;
-      
-      let repetidas = pasted ? inv : Math.max(0, inv - 1);
       const reserved = state.pendingTradeItems[key] || 0;
-      
-      if(repetidas > 0) {
+      let repetidas = pasted ? inv : Math.max(0, inv - 1);
+      const available = Math.max(0, repetidas - reserved);
+
+      if (repetidas > 0) {
         hasDups = true;
         const basePath = `${ALBUM_CONFIG.basePath}/${team.id}/${i}`;
         const imgSrc = getStickerImgSrc(team.id, i);
-        
-        const reservedHtml = reserved > 0 ? `<div style="position:absolute; bottom:-10px; right:-10px; background:#ff9500; color:white; padding: 2px 6px; border-radius:10px; display:flex; justify-content:center; align-items:center; z-index:5; font-weight:bold; font-size:0.75rem;" title="Reservada en intercambio">🤝 ${reserved}</div>` : '';
-        
+
+        const reservedHtml = reserved > 0
+          ? `<div style="position:absolute; bottom:-10px; right:-10px; background:#ff9500; color:white; padding: 2px 6px; border-radius:10px; z-index:5; font-weight:bold; font-size:0.75rem;" title="Reservada en intercambio">🤝 ${reserved}</div>`
+          : '';
+
         const item = document.createElement('div');
         item.style.position = 'relative';
+        item.style.cursor = available > 0 ? 'pointer' : 'default';
+        item.dataset.key = key;
         item.innerHTML = `
-          <div style="position:absolute; top:-10px; right:-10px; background:#e2001a; color:white; width:25px; height:25px; border-radius:50%; display:flex; justify-content:center; align-items:center; z-index:5; font-weight:bold;">${repetidas}</div>
+          <div class="dup-count-badge" style="position:absolute; top:-10px; right:-10px; background:#e2001a; color:white; width:25px; height:25px; border-radius:50%; display:flex; justify-content:center; align-items:center; z-index:5; font-weight:bold;">${repetidas}</div>
           ${reservedHtml}
-          <div class="sticker-card"><img src="${imgSrc}" class="sticker-img" onerror="window.handleImageError(this, '${basePath}')" onload="window.handleImageSuccess(this, '${basePath}')"/></div>
+          <div class="dup-check-icon" style="display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:2rem; z-index:10; text-shadow:0 2px 8px #000;">✅</div>
+          <div class="sticker-card" style="transition: opacity 0.2s;"><img src="${imgSrc}" class="sticker-img" onerror="window.handleImageError(this, '${basePath}')" onload="window.handleImageSuccess(this, '${basePath}')"/></div>
         `;
+
+        if (available > 0) {
+          item.addEventListener('click', () => _toggleDupSelection(item, key));
+        }
         grid.appendChild(item);
       }
     }
   });
-  
+
   if (!hasDups) {
     grid.innerHTML = '<p>No tenés repetidas.</p>';
   }
 }
 
-function sellAllDuplicates() {
+function _toggleDupSelection(item, key) {
+  if (_selectedDuplicates.has(key)) {
+    _selectedDuplicates.delete(key);
+    item.querySelector('.dup-check-icon').style.display = 'none';
+    item.querySelector('.sticker-card').style.opacity = '1';
+    item.style.outline = 'none';
+  } else {
+    _selectedDuplicates.add(key);
+    item.querySelector('.dup-check-icon').style.display = 'block';
+    item.querySelector('.sticker-card').style.opacity = '0.45';
+    item.style.outline = '2.5px solid #4ade80';
+    item.style.borderRadius = '10px';
+  }
+  _updateSellSelectedBtn();
+}
+
+function _updateSellSelectedBtn() {
+  const btn = document.getElementById('sell-selected-btn');
+  if (!btn) return;
+  const count = _selectedDuplicates.size;
+  btn.disabled = count === 0;
+  btn.textContent = count > 0 ? `💸 Vender seleccionadas (${count})` : '💸 Vender seleccionadas';
+}
+
+function sellSelectedDuplicates() {
+  if (_selectedDuplicates.size === 0) {
+    showToast('Seleccioná al menos una figurita.', 'error');
+    return;
+  }
   let sold = 0;
-  for(const key in state.inventory) {
+  let coins = 0;
+  _selectedDuplicates.forEach(key => {
     const pasted = !!state.pasted[key];
     const inv = state.inventory[key] || 0;
     const reserved = state.pendingTradeItems[key] || 0;
-    
     let repetidas = pasted ? inv : Math.max(0, inv - 1);
-    // No vender las que están reservadas en trades activos
-    repetidas = Math.max(0, repetidas - reserved);
-    
-    if(repetidas > 0) {
-      sold += repetidas;
-      state.inventory[key] -= repetidas;
+    const available = Math.max(0, repetidas - reserved);
+    if (available > 0) {
+      sold += available;
+      const isExtra = key.startsWith('extrastickers');
+      coins += available * (isExtra ? 100 : 15);
+      state.inventory[key] -= available;
+      if (state.inventory[key] <= 0) delete state.inventory[key];
     }
-  }
-  
+  });
   if (sold > 0) {
-    state.coins += (sold * 15);
+    state.coins += coins;
     saveState();
-    showToast(`Vendiste ${sold} repetidas.`);
+    showToast(`Vendiste ${sold} repetida${sold > 1 ? 's' : ''} (+${coins}🪙).`);
     renderDuplicates();
   } else {
-    showToast("No tenés repetidas.", "error");
+    showToast('No hay repetidas disponibles para vender.', 'error');
+  }
+}
+
+function sellAllDuplicates() {
+  let sold = 0;
+  let coins = 0;
+  for (const key in state.inventory) {
+    const pasted = !!state.pasted[key];
+    const inv = state.inventory[key] || 0;
+    const reserved = state.pendingTradeItems[key] || 0;
+    let repetidas = pasted ? inv : Math.max(0, inv - 1);
+    const available = Math.max(0, repetidas - reserved);
+    if (available > 0) {
+      sold += available;
+      const isExtra = key.startsWith('extrastickers');
+      coins += available * (isExtra ? 100 : 15);
+      state.inventory[key] -= available;
+      if (state.inventory[key] <= 0) delete state.inventory[key];
+    }
+  }
+  if (sold > 0) {
+    state.coins += coins;
+    saveState();
+    showToast(`Vendiste ${sold} repetidas (+${coins}🪙).`);
+    renderDuplicates();
+  } else {
+    showToast('No tenés repetidas.', 'error');
   }
 }
 
@@ -1704,7 +1772,6 @@ async function publishTrade() {
 async function loadOpenTrades() {
   if (!_fbDb || !_currentUser) return;
   const grid = document.getElementById('trade-market-grid');
-  const emptyEl = document.getElementById('trade-market-empty');
   if (!grid) return;
 
   // Limpiar listener anterior
@@ -1714,38 +1781,77 @@ async function loadOpenTrades() {
   }
 
   try {
-    // Para evitar requerir un índice compuesto en Firestore, quitamos orderBy de la consulta de Firestore
-    // y realizamos la ordenación en memoria (JavaScript)
     const query = _fbDb.collection('trades')
       .where('status', '==', 'open')
       .limit(100);
 
     _tradesUnsubscribe = query.onSnapshot(snap => {
       grid.innerHTML = '';
-      let hasCards = false;
 
       // Ordenar en memoria por createdAt desc
       const tradesArray = [];
       snap.forEach(doc => {
-        tradesArray.push({ id: doc.id, data: doc.data() });
+        if (doc.data().creatorUid !== _currentUser.uid)
+          tradesArray.push({ id: doc.id, data: doc.data() });
       });
       tradesArray.sort((a, b) => (b.data.createdAt || 0) - (a.data.createdAt || 0));
 
-      tradesArray.forEach(item => {
-        const data = item.data;
-        // No mostrar mis propias ofertas aquí
-        if (data.creatorUid === _currentUser.uid) return;
+      // Separar en dos grupos
+      const useful = tradesArray.filter(item =>
+        item.data.wantStickers.every(key => _getDuplicateCount(key) > 0)
+      );
+      const notUseful = tradesArray.filter(item =>
+        !item.data.wantStickers.every(key => _getDuplicateCount(key) > 0)
+      );
 
-        hasCards = true;
-        const card = _createTradeOfferCard(item.id, data, false);
-        grid.appendChild(card);
-      });
-
-      if (!hasCards) {
+      if (tradesArray.length === 0) {
         grid.innerHTML = `<div class="trade-empty-state"><div style="font-size:3rem;">🏝️</div><p>No hay ofertas de otros jugadores en este momento.</p></div>`;
+        _updateTradeBadge(snap);
+        return;
       }
 
-      // Actualizar badge
+      // Sección: Te sirven
+      const usefulSection = document.createElement('div');
+      usefulSection.innerHTML = `
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px; margin-top:8px;">
+          <span style="font-size:1.4rem;">✅</span>
+          <h4 style="font-family:var(--font-title); color:#4ade80; font-size:1rem; letter-spacing:1.5px; text-transform:uppercase; margin:0;">Te sirven <span style="color:#4ade80; font-size:0.85rem;">(${useful.length})</span></h4>
+        </div>
+      `;
+      if (useful.length > 0) {
+        const usefulGrid = document.createElement('div');
+        usefulGrid.className = 'trade-market-grid';
+        usefulGrid.style.marginBottom = '28px';
+        useful.forEach(item => usefulGrid.appendChild(_createTradeOfferCard(item.id, item.data, false)));
+        usefulSection.appendChild(usefulGrid);
+      } else {
+        usefulSection.innerHTML += `<p style="color:rgba(255,255,255,0.35); font-size:0.9rem; margin-bottom:24px;">No hay ofertas que puedas aceptar ahora.</p>`;
+      }
+      grid.appendChild(usefulSection);
+
+      // Divisor
+      const divider = document.createElement('hr');
+      divider.style.cssText = 'border:none; border-top:1px solid rgba(255,255,255,0.07); margin:8px 0 24px;';
+      grid.appendChild(divider);
+
+      // Sección: No te sirven
+      const notUsefulSection = document.createElement('div');
+      notUsefulSection.innerHTML = `
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+          <span style="font-size:1.4rem;">❌</span>
+          <h4 style="font-family:var(--font-title); color:#f87171; font-size:1rem; letter-spacing:1.5px; text-transform:uppercase; margin:0;">No te sirven <span style="color:#f87171; font-size:0.85rem;">(${notUseful.length})</span></h4>
+        </div>
+      `;
+      if (notUseful.length > 0) {
+        const notUsefulGrid = document.createElement('div');
+        notUsefulGrid.className = 'trade-market-grid';
+        notUseful.forEach(item => notUsefulGrid.appendChild(_createTradeOfferCard(item.id, item.data, false)));
+        notUsefulSection.appendChild(notUsefulGrid);
+      } else {
+        notUsefulSection.innerHTML += `<p style="color:rgba(255,255,255,0.35); font-size:0.9rem;">No hay otras ofertas.</p>`;
+      }
+      grid.appendChild(notUsefulSection);
+
       _updateTradeBadge(snap);
     }, err => {
       console.error('[Trade] Error en onSnapshot de trades:', err);

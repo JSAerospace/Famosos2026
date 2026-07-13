@@ -156,7 +156,10 @@
     <div class="duplicates-layout">
       <div class="dup-actions">
         <h2 class="section-title">🔄 Repetidas</h2>
-        <button class="dup-btn sell-all" id="sell-all-btn" onclick="sellAllDuplicates()">💸 Vender todas (Normal +15🪙 / Extra +100🪙)</button>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="dup-btn sell-all" id="sell-selected-btn" onclick="sellSelectedDuplicates()" disabled style="background:linear-gradient(135deg,#22c55e,#16a34a);">💸 Vender seleccionadas</button>
+          <button class="dup-btn sell-all" id="sell-all-btn" onclick="sellAllDuplicates()">💸 Vender todas (Normal +15🪙 / Extra +100🪙)</button>
+        </div>
       </div>
       <div class="dup-grid-area">
         <div class="dup-grid" id="dup-grid"></div>
