@@ -498,11 +498,16 @@ function renderAlbumPage(justPastedKey = null) {
   gridL.innerHTML = '';
   gridR.innerHTML = '';
   
-  // Si es sección extra, ocultamos la grilla derecha y mostramos un banner especial
+  // Si es sección extra, mostramos la grilla derecha abajo del banner
   if (team.id === 'extrastickers') {
-    gridR.classList.add('hidden');
+    gridR.classList.remove('hidden');
+    gridR.style.order = '2';
+    document.getElementById('group-info').style.order = '1';
+    document.getElementById('group-info').style.marginBottom = '20px';
+    document.getElementById('group-info').style.marginTop = '0px';
+
     document.getElementById('group-info').innerHTML = `
-      <div class="legendary-banner" style="text-align: center; color: #ffd700; padding: 20px; font-family: var(--font-title); border: 2px solid #ffd700; background: rgba(0,0,0,0.5); border-radius: 10px; margin-top: 15px;">
+      <div class="legendary-banner" style="text-align: center; color: #ffd700; padding: 20px; font-family: var(--font-title); border: 2px solid #ffd700; background: rgba(0,0,0,0.5); border-radius: 10px; width: 100%;">
         <div style="font-size: 2.5rem; margin-bottom: 10px; filter: drop-shadow(0 0 10px #ffd700);">👑</div>
         <div style="font-size: 1.3rem; font-weight: bold; text-transform: uppercase; margin-bottom: 6px; letter-spacing: 1px;">Colección de Leyendas</div>
         <p style="font-size: 0.85rem; color: #ccc; line-height: 1.4; max-width: 250px; margin: 0 auto;">
@@ -512,6 +517,11 @@ function renderAlbumPage(justPastedKey = null) {
     `;
   } else {
     gridR.classList.remove('hidden');
+    gridR.style.order = '1';
+    document.getElementById('group-info').style.order = '2';
+    document.getElementById('group-info').style.marginBottom = '0px';
+    document.getElementById('group-info').style.marginTop = '0px';
+
     let flagsHtml = team.flags.map(f => `<span class="group-flag" style="border-bottom: 3px solid ${team.color1}">${f}</span>`).join('');
     document.getElementById('group-info').innerHTML = `
       <div class="group-title">${team.group}</div>
@@ -551,7 +561,8 @@ function renderAlbumPage(justPastedKey = null) {
       slot.onclick = () => showToast(`Buscá la figurita ${i} en los sobres`);
     }
     
-    if (team.id === 'extrastickers' || i <= 5) gridL.appendChild(slot);
+    const goesToLeft = team.id === 'extrastickers' ? (i <= 6) : (i <= 5);
+    if (goesToLeft) gridL.appendChild(slot);
     else gridR.appendChild(slot);
   }
 }
