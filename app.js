@@ -1468,7 +1468,7 @@ function toggleMusic() {
 // ==========================================================================
 // INTERCAMBIO DE FIGURITAS
 // ==========================================================================
-const MAX_TRADES_PER_DAY = 3;
+// Sin límite diario de intercambios
 
 function renderTradePage() {
   const loginPrompt = document.getElementById('trade-login-prompt');
@@ -1500,23 +1500,10 @@ function renderTradePage() {
 }
 
 function updateTradeDailyLimit() {
-  // Reset diario si cambió el día
-  const todayStr = new Date().toISOString().slice(0, 10);
-  if (state.tradeDate !== todayStr) {
-    state.tradesToday = 0;
-    state.tradeDate = todayStr;
-    saveState();
-  }
   const el = document.getElementById('trade-daily-limit');
   if (!el) return;
-  el.textContent = `${state.tradesToday}/${MAX_TRADES_PER_DAY} intercambios hoy`;
-  if (state.tradesToday >= MAX_TRADES_PER_DAY) {
-    el.style.color = '#dc3545';
-  } else if (state.tradesToday >= 2) {
-    el.style.color = '#ffa500';
-  } else {
-    el.style.color = '#28a745';
-  }
+  el.textContent = `${state.tradesToday} intercambios realizados hoy`;
+  el.style.color = '#4ade80';
 }
 
 function setTradeMode(mode) {
@@ -1659,7 +1646,7 @@ function toggleTradeChip(key, side) {
 function updateTradePublishBtn() {
   const btn = document.getElementById('trade-publish-btn');
   if (!btn) return;
-  const canPublish = _selectedOffer.length > 0 && _selectedWant.length > 0 && state.tradesToday < MAX_TRADES_PER_DAY;
+  const canPublish = _selectedOffer.length > 0 && _selectedWant.length > 0;
   btn.disabled = !canPublish;
 }
 
@@ -1670,10 +1657,6 @@ async function publishTrade() {
   }
   if (_selectedOffer.length === 0 || _selectedWant.length === 0) {
     showToast('Seleccioná al menos una figurita de cada lado.', 'error');
-    return;
-  }
-  if (state.tradesToday >= MAX_TRADES_PER_DAY) {
-    showToast('Alcanzaste el límite diario de intercambios.', 'error');
     return;
   }
 
@@ -1901,10 +1884,6 @@ function _timeAgo(timestamp) {
 async function acceptTrade(tradeId) {
   if (!_currentUser || !_fbDb) {
     showToast('Necesit\u00e1s iniciar sesi\u00f3n.', 'error');
-    return;
-  }
-  if (state.tradesToday >= MAX_TRADES_PER_DAY) {
-    showToast('Alcanzaste el l\u00edmite diario de intercambios.', 'error');
     return;
   }
 
