@@ -92,6 +92,16 @@ const ALBUM_CONFIG = {
             flags: ['FRA', 'AUS', 'DEN', 'TUN']
         },
         {
+            id: 'uruguay',
+            name: 'Uruguay',
+            flag: '🇺🇾',
+            federation: 'Asociación Uruguaya de Fútbol',
+            group: 'GROUP A',
+            color1: '#75aadb',
+            color2: '#ffffff',
+            flags: ['URU', 'RUS', 'KSA', 'EGY']
+        },
+        {
             id: 'extrastickers',
             name: 'Extra Stickers',
             flag: '⭐',
