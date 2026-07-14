@@ -886,9 +886,9 @@ function renderDuplicates() {
 
         const flagImgPath = team.id !== 'extrastickers' ? `${ALBUM_CONFIG.basePath}/${team.id}/bandera.png` : null;
         const flagBadgeHtml = `
-          <div style="position:absolute; bottom:0; left:0; right:0; background:rgba(0,0,0,0.55); border-radius:0 0 8px 8px; display:flex; align-items:center; justify-content:center; gap:4px; padding:3px 4px; z-index:6; pointer-events:none;">
-            ${flagImgPath ? `<img src="${flagImgPath}" style="height:14px; border-radius:2px; object-fit:cover;" onerror="this.style.display='none'" />` : ''}
-            <span style="font-size:0.65rem; color:#fff; font-weight:600; letter-spacing:0.3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${team.flag} ${team.name}</span>
+          <div style="position:absolute; bottom:0; left:0; right:0; background:rgba(0,0,0,0.60); border-radius:0 0 8px 8px; display:flex; align-items:center; justify-content:center; gap:5px; padding:3px 5px; z-index:6; pointer-events:none;">
+            ${flagImgPath ? `<img src="${flagImgPath}" style="height:13px; border-radius:2px; object-fit:cover;" onerror="this.style.display='none'" />` : '⭐'}
+            <span style="font-size:0.65rem; color:#fff; font-weight:700; letter-spacing:0.3px;">#${i}</span>
           </div>`;
 
         const item = document.createElement('div');
