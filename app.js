@@ -884,6 +884,13 @@ function renderDuplicates() {
           ? `<div style="position:absolute; bottom:-10px; right:-10px; background:#ff9500; color:white; padding: 2px 6px; border-radius:10px; z-index:5; font-weight:bold; font-size:0.75rem;" title="Reservada en intercambio">🤝 ${reserved}</div>`
           : '';
 
+        const flagImgPath = team.id !== 'extrastickers' ? `${ALBUM_CONFIG.basePath}/${team.id}/bandera.png` : null;
+        const flagBadgeHtml = `
+          <div style="position:absolute; bottom:0; left:0; right:0; background:rgba(0,0,0,0.55); border-radius:0 0 8px 8px; display:flex; align-items:center; justify-content:center; gap:4px; padding:3px 4px; z-index:6; pointer-events:none;">
+            ${flagImgPath ? `<img src="${flagImgPath}" style="height:14px; border-radius:2px; object-fit:cover;" onerror="this.style.display='none'" />` : ''}
+            <span style="font-size:0.65rem; color:#fff; font-weight:600; letter-spacing:0.3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${team.flag} ${team.name}</span>
+          </div>`;
+
         const item = document.createElement('div');
         item.style.position = 'relative';
         item.style.cursor = available > 0 ? 'pointer' : 'default';
@@ -892,7 +899,10 @@ function renderDuplicates() {
           <div class="dup-count-badge" style="position:absolute; top:-10px; right:-10px; background:#e2001a; color:white; width:25px; height:25px; border-radius:50%; display:flex; justify-content:center; align-items:center; z-index:5; font-weight:bold;">${repetidas}</div>
           ${reservedHtml}
           <div class="dup-check-icon" style="display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:2rem; z-index:10; text-shadow:0 2px 8px #000;">✅</div>
-          <div class="sticker-card" style="transition: opacity 0.2s;"><img src="${imgSrc}" class="sticker-img" onerror="window.handleImageError(this, '${basePath}')" onload="window.handleImageSuccess(this, '${basePath}')"/></div>
+          <div class="sticker-card" style="transition: opacity 0.2s; position:relative; overflow:hidden;">
+            <img src="${imgSrc}" class="sticker-img" onerror="window.handleImageError(this, '${basePath}')" onload="window.handleImageSuccess(this, '${basePath}')"/>
+            ${flagBadgeHtml}
+          </div>
         `;
 
         if (available > 0) {
