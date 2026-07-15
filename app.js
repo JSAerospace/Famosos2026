@@ -63,6 +63,12 @@ async function handleAuthStateChanged(user) {
     renderPacksInventory();
     updatePackStage();
     updateTimer();
+    listenToMyCompletedTrades(user.uid);
+  } else {
+    if (_myTradesListenerUnsubscribe) {
+      _myTradesListenerUnsubscribe();
+      _myTradesListenerUnsubscribe = null;
+    }
   }
 }
 
@@ -189,6 +195,9 @@ let _tradeMode = 'single'; // 'single' | 'multi'
 let _selectedOffer = [];   // keys de figuritas ofrecidas
 let _selectedWant = [];    // keys de figuritas pedidas
 let _tradesUnsubscribe = null; // para limpiar listener de Firestore
+let _myTradesListenerUnsubscribe = null;
+const _sessionStartTime = Date.now();
+let _shownTradeNotifications = new Set();
 
 // Keys de figuritas reservadas en trades activos propios (no vendibles)
 let _reservedInTrades = new Set();
@@ -2197,6 +2206,151 @@ async function cancelTrade(tradeId) {
     console.error('[Trade] Error al cancelar:', e);
     showToast('Error al cancelar la oferta.', 'error');
   }
+}
+
+// ==========================================================================
+// REAL-TIME NOTIFICATIONS FOR COMPLETED TRADES
+// ==========================================================================
+function listenToMyCompletedTrades(uid) {
+  if (!_fbDb || !uid) return;
+  if (_myTradesListenerUnsubscribe) {
+    _myTradesListenerUnsubscribe();
+    _myTradesListenerUnsubscribe = null;
+  }
+
+  _myTradesListenerUnsubscribe = _fbDb.collection('trades')
+    .where('creatorUid', '==', uid)
+    .where('status', '==', 'completed')
+    .onSnapshot(snap => {
+      snap.forEach(async doc => {
+        const trade = doc.data();
+        const tradeId = doc.id;
+
+        // Solo notificar si fue completado después de iniciar la sesión actual y no lo hemos mostrado
+        if (trade.completedAt && trade.completedAt > _sessionStartTime && !_shownTradeNotifications.has(tradeId)) {
+          _shownTradeNotifications.add(tradeId);
+
+          // Mostrar modal con la info del intercambio
+          showTradeCompletedModal(trade);
+
+          // Sincronizar el estado local con los cambios de inventario hechos por el aceptante en Firestore
+          await loadStateFromCloud(uid);
+
+          // Refrescar vistas globales
+          renderAlbumPage();
+          renderTeamIndicators();
+          updateTopBar();
+
+          // Refrescar pestañas activas
+          const activeTab = document.querySelector('.nav-tab.active');
+          if (activeTab) {
+            const tabId = activeTab.dataset.tab;
+            if (tabId === 'duplicates') renderDuplicates();
+            if (tabId === 'trade') {
+              populateTradeSelectors();
+              loadMyTrades();
+            }
+          }
+        }
+      });
+    }, err => {
+      console.error('[Trade Notifications] Error en el listener:', err);
+    });
+}
+
+function showTradeCompletedModal(trade) {
+  // Crear el contenedor del modal
+  const modal = document.createElement('div');
+  modal.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 99999;
+    font-family: 'Space Grotesk', sans-serif;
+    animation: fadeIn 0.3s ease;
+  `;
+
+  // Traducir los keys a etiquetas legibles
+  const offerLabels = trade.offerStickers.map(key => _getStickerLabel(key)).join(', ');
+  const wantLabels = trade.wantStickers.map(key => _getStickerLabel(key)).join(', ');
+  const accepterName = trade.acceptedByEmail ? (trade.acceptedByEmail.split('@')[0]) : 'Otro coleccionista';
+
+  modal.innerHTML = `
+    <div style="
+      background: linear-gradient(135deg, #1e0b36 0%, #0d0418 100%);
+      border: 2px solid #4ade80;
+      box-shadow: 0 0 25px rgba(74, 222, 128, 0.4);
+      padding: 30px;
+      border-radius: 16px;
+      max-width: 450px;
+      width: 90%;
+      text-align: center;
+      color: white;
+      position: relative;
+      animation: scaleUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    ">
+      <div style="font-size: 4rem; margin-bottom: 15px;">🤝</div>
+      <h2 style="font-family: 'Orbitron', sans-serif; color: #4ade80; margin-bottom: 10px; font-size: 1.5rem; text-transform: uppercase; letter-spacing: 1px;">¡Intercambio Completado!</h2>
+      <p style="color: #ccc; font-size: 0.95rem; margin-bottom: 20px; line-height: 1.5;">
+        El usuario <b style="color: #ffd700;">${accepterName}</b> aceptó tu oferta de intercambio.
+      </p>
+
+      <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; margin-bottom: 25px; text-align: left; border: 1px solid rgba(255,255,255,0.1);">
+        <div style="margin-bottom: 10px;">
+          <span style="color: #f87171; font-weight: bold; font-size: 0.8rem; text-transform: uppercase; display: block; margin-bottom: 3px;">Entregaste:</span>
+          <span style="color: #fff; font-size: 0.95rem; font-weight: 500;">${offerLabels}</span>
+        </div>
+        <div style="border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 10px;">
+          <span style="color: #4ade80; font-weight: bold; font-size: 0.8rem; text-transform: uppercase; display: block; margin-bottom: 3px;">Recibiste:</span>
+          <span style="color: #fff; font-size: 0.95rem; font-weight: 500;">${wantLabels}</span>
+        </div>
+      </div>
+
+      <button id="close-trade-notif-btn" style="
+        background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+        color: #12051a;
+        border: none;
+        padding: 12px 30px;
+        border-radius: 8px;
+        font-weight: 900;
+        font-family: 'Orbitron', sans-serif;
+        text-transform: uppercase;
+        cursor: pointer;
+        font-size: 0.95rem;
+        transition: 0.2s;
+        box-shadow: 0 4px 15px rgba(74, 222, 128, 0.3);
+      ">¡Genial!</button>
+    </div>
+  `;
+
+  // Estilos de animación keyframe si no existen
+  if (!document.getElementById('trade-notif-styles')) {
+    const styleEl = document.createElement('style');
+    styleEl.id = 'trade-notif-styles';
+    styleEl.textContent = `
+      @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      @keyframes scaleUp {
+        from { transform: scale(0.85); opacity: 0; }
+        to { transform: scale(1); opacity: 1; }
+      }
+    `;
+    document.head.appendChild(styleEl);
+  }
+
+  document.body.appendChild(modal);
+
+  modal.querySelector('#close-trade-notif-btn').onclick = () => {
+    modal.remove();
+  };
 }
 
 
