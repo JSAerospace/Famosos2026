@@ -2226,14 +2226,29 @@ function listenToMyCompletedTrades(uid) {
         const trade = doc.data();
         const tradeId = doc.id;
 
-        // Solo notificar si fue completado después de iniciar la sesión actual y no lo hemos mostrado
-        if (trade.completedAt && trade.completedAt > _sessionStartTime && !_shownTradeNotifications.has(tradeId)) {
+        // Evitar procesar dos veces en la misma sesión local
+        if (_shownTradeNotifications.has(tradeId)) return;
+
+        if (trade.notifiedCreator !== true) {
           _shownTradeNotifications.add(tradeId);
 
-          // Mostrar modal con la info del intercambio
-          showTradeCompletedModal(trade);
+          // 1. Actualizar en Firestore para que no se notifique en futuras recargas o dispositivos
+          try {
+            await _fbDb.collection('trades').doc(tradeId).update({
+              notifiedCreator: true
+            });
+          } catch (e) {
+            console.error('[Trade Notifications] Error actualizando notifiedCreator:', e);
+          }
 
-          // Sincronizar el estado local con los cambios de inventario hechos por el aceptante en Firestore
+          // 2. Solo mostrar el cartel si el intercambio ocurrió hace menos de 72 horas (evita notificar trades viejos)
+          const IS_RECENT = trade.completedAt && (Date.now() - trade.completedAt) < 72 * 60 * 60 * 1000;
+          if (IS_RECENT) {
+            // Mostrar modal con la info del intercambio
+            showTradeCompletedModal(trade);
+          }
+
+          // 3. Sincronizar el estado local con los cambios de inventario hechos por el aceptante en Firestore
           await loadStateFromCloud(uid);
 
           // Refrescar vistas globales
