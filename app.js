@@ -1206,7 +1206,7 @@ async function adminLoadUsers() {
       const d = doc.data();
       const uid = doc.id;
       const email = d.email || 'Desconocido';
-      const name = d.name || 'Sin Nombre';
+      const name = d.displayName || d.name || (d.email ? d.email.split('@')[0] : 'Sin Nombre');
       const coins = d.coins || 0;
       
       const pastedCount = d.pasted ? Object.keys(d.pasted).length : 0;
