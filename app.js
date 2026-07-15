@@ -57,6 +57,7 @@ async function handleAuthStateChanged(user) {
   if (user) {
     // La nube tiene prioridad: cargar y luego refrescar toda la UI
     await loadStateFromCloud(user.uid);
+    await syncPendingTradeItemsWithDatabase();
     renderAlbumPage();
     renderTeamIndicators();
     updateTopBar();
@@ -390,8 +391,14 @@ function switchTab(tabId) {
   document.getElementById(`tab-${tabId}`).classList.remove('hidden');
   
   if (tabId === 'album') renderAlbumPage();
-  if (tabId === 'duplicates') renderDuplicates();
-  if (tabId === 'trade') renderTradePage();
+  if (tabId === 'duplicates') {
+    syncPendingTradeItemsWithDatabase();
+    renderDuplicates();
+  }
+  if (tabId === 'trade') {
+    syncPendingTradeItemsWithDatabase();
+    renderTradePage();
+  }
   if (tabId === 'admin') {
     adminLoadCodes();
     adminLoadUsers();
@@ -2205,6 +2212,54 @@ async function cancelTrade(tradeId) {
   } catch (e) {
     console.error('[Trade] Error al cancelar:', e);
     showToast('Error al cancelar la oferta.', 'error');
+  }
+}
+
+// ==========================================================================
+// AUTOCURACIÓN DE FIGURITAS RESERVADAS EN INTERCAMBIOS (PENDING TRADE ITEMS)
+// ==========================================================================
+async function syncPendingTradeItemsWithDatabase() {
+  if (!_fbDb || !_currentUser) return;
+  try {
+    const snap = await _fbDb.collection('trades')
+      .where('creatorUid', '==', _currentUser.uid)
+      .where('status', '==', 'open')
+      .get();
+      
+    const actualPending = {};
+    _reservedInTrades.clear();
+    
+    snap.forEach(doc => {
+      const trade = doc.data();
+      if (trade.offerStickers) {
+        trade.offerStickers.forEach(key => {
+          actualPending[key] = (actualPending[key] || 0) + 1;
+          _reservedInTrades.add(key);
+        });
+      }
+    });
+    
+    let changed = false;
+    const keys1 = Object.keys(actualPending);
+    const keys2 = Object.keys(state.pendingTradeItems || {});
+    if (keys1.length !== keys2.length) {
+      changed = true;
+    } else {
+      for (const k of keys1) {
+        if (actualPending[k] !== state.pendingTradeItems[k]) {
+          changed = true;
+          break;
+        }
+      }
+    }
+    
+    if (changed) {
+      state.pendingTradeItems = actualPending;
+      saveState();
+      console.log('[Self-Healing] Reservas de intercambio sincronizadas con base de datos.');
+    }
+  } catch (e) {
+    console.error('[Self-Healing] Error sincronizando reservas:', e);
   }
 }
 
